@@ -2,7 +2,7 @@
 s=$1
 
 GNU=$(echo -n $1 | base64)
-MY=$(echo -n $1 | ./base.o)
+MY=$(echo -n $1 | ./base_program)
 
 echo -e "Verified base64:$GNU"
 echo -e "My base64:\t$MY" 

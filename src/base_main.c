@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
     
     if (arguments.encode && arguments.base64) {
       char* encoded = base64_encode(buffer, charsCount, arguments.verbose);
-      if(verbose) printf("encoded string: ");
+      if(verbose) printf("\nENCODED: ");
       printf("%s\n", encoded);
       free(encoded);
 //    getline(kk);

@@ -14,3 +14,6 @@ obj/base_main.o: src/base_main.c src/base.h
 
 clean:
 	rm -rf obj base_program
+
+run:
+	./base_program -v
