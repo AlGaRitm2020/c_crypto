@@ -6,6 +6,8 @@
 
 char* base64_encode(char *data, size_t inputSize, bool verbose);
 char* base64_decode(char *data, size_t inputSize, bool verbose);
+char* base32_encode(char *data, size_t inputSize, bool verbose);
+char* base32_decode(char *data, size_t inputSize, bool verbose);
 
 
 #endif // !DEBUG

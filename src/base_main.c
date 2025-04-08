@@ -15,7 +15,7 @@ static struct argp_option options[] = {
     {"output", 'o', "FILE", 0, "Output to FILE instead of stdout"},
     {"encode", 'e', 0, 0, "Encode input (default)"},
     {"decode", 'd', 0, 0, "Decode input"},
-    {"base64", '6', 0, 0, "Base64 encoding (default)"},
+    {"base64", '4', 0, 0, "Base64 encoding (default)"},
     {"base32", '2', 0, 0, "Base32 encoding"},
     {0}
 };
@@ -128,10 +128,16 @@ int main(int argc, char **argv) {
 
     }
     else if(arguments.encode && !arguments.base64){
-      printf("base32 encode\n");
+      char* encoded = base32_encode(buffer, charsCount, arguments.verbose);
+      if(verbose) printf("\nENCODED: ");
+      printf("%s\n", encoded);
+      free(encoded);     
     }
     else if(!arguments.encode && !arguments.base64){
-      printf("base32 decode\n");
+      char* decoded = base32_decode(buffer, charsCount, arguments.verbose);
+      if(verbose) printf("\nDECODED: ");
+      printf("%s\n", decoded);
+      free(decoded);
     }   
     /* Clean up */
     free(arguments.input_files);

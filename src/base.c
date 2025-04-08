@@ -3,9 +3,9 @@
 #include <stdio.h>
 
 
-char BASE64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz01234567890+/";
+char BASE64[64]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789+/";
 
-char BASE32[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567";
+char BASE32[32]="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 
 char* format24bits(int value, char* buffer) {
@@ -33,13 +33,15 @@ char* base64_encode(char *data, size_t inputSize, bool verbose) {
   char sextets[4];
 
   char* encoded = (char*)malloc((int)outputSize * sizeof(char));
-  for (int i=0,j=0; i < (int)inputSize; i++) {
+  int j=0;
+  for (int i=0; i < (int)inputSize; i++) {
     octets[i%3] = data[i];
     if (verbose) printf("octet[%d][%d]:\t%8.8b\n",  i/3, i%3,octets[i%3]);
 
     int chunk24Bit;
     int lastOctet= (int)(inputSize) %3;
     int lastSextet= ((lastOctet * 8)/6)+1;
+    if (lastOctet ==0 ) lastSextet=5;
 
     if (i%3 ==2 || i == inputSize-1){ // chunk create condition
       // adding blank octets to fill 24 bit chunk
@@ -63,6 +65,7 @@ char* base64_encode(char *data, size_t inputSize, bool verbose) {
      }
     }
    }
+   encoded[j] = '\0';
   return encoded;
 }
 
@@ -110,8 +113,13 @@ char* base32_encode(char *data, size_t inputSize, bool verbose) {
   int64_t octets[5];
   int64_t quintets[8];
 
+    int lastOctet= (int)(inputSize) %5;
+    int lastQuintet= ((lastOctet * 8)/5)+1;
+    if (lastOctet==0) lastQuintet=9;
+
   char* encoded = (char*)malloc((int)outputSize * sizeof(char));
-  for (int i=0,j=0; i < (int)inputSize; i++) {
+  int j=0;
+  for (int i=0; i < (int)inputSize; i++) {
     octets[i%5] = data[i];
     if (verbose) printf("octet[%d][%d]:\t%8.8b\n",  i/5, i%5,octets[i%5]);
 
@@ -132,13 +140,18 @@ char* base32_encode(char *data, size_t inputSize, bool verbose) {
 
       for (int jj=0; jj<8; jj++){
         quintets[jj] = (chunk40Bit >> (5 * (7-jj))) & 0x1F;
-        if (quintets[jj] == 0)
+        if (verbose) printf("quintets[%d][%d]:\t%5.5b  ===  %c\n",  i/8, jj%8,quintets[jj],BASE32[quintets[jj]]);
+        if ((i==inputSize-1) && (jj>=lastQuintet)) {
           encoded[j++] = '='; 
+//          encoded[j++] = '';
+        }
         else
           encoded[j++] = BASE32[quintets[jj]];
      }
+      
     }
    }
+   encoded[j] = '\0';
   return encoded;
 }
 
