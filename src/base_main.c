@@ -113,15 +113,26 @@ int main(int argc, char **argv) {
     /* Program logic goes here */
     if(verbose) printf("Running in %s mode (encoding: %s)\n", arguments.encode ? "encode" : "decode", arguments.base64 ? "base64" : "base32");
     
-    if (arguments.encode && arguments.base64) {
+    if (arguments.encode && arguments.base64) { // base64 encod3
       char* encoded = base64_encode(buffer, charsCount, arguments.verbose);
       if(verbose) printf("\nENCODED: ");
       printf("%s\n", encoded);
       free(encoded);
 //    getline(kk);
     }
-    else if (!arguments.encode && arguments.base64)
-    
+    else if (!arguments.encode && arguments.base64) { // base64 decode
+      char* decoded = base64_decode(buffer, charsCount, arguments.verbose);
+      if(verbose) printf("\nDECODED: ");
+      printf("%s\n", decoded);
+      free(decoded);
+
+    }
+    else if(arguments.encode && !arguments.base64){
+      printf("base32 encode\n");
+    }
+    else if(!arguments.encode && !arguments.base64){
+      printf("base32 decode\n");
+    }   
     /* Clean up */
     free(arguments.input_files);
     

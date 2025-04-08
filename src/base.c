@@ -36,8 +36,7 @@ char* base64_encode(char *data, size_t inputSize, bool verbose) {
       }
       chunk24Bit = (octets[0] << 16) + (octets[1] << 8) + octets[2]; 
       //if (verbose) printf("chunk24[%d]: %024b\n", i/3,chunk24Bit);
-      char *formattedChunk;
-      formattedChunk = format24bits(chunk24Bit, formattedChunk);
+      char *formattedChunk = format24bits(chunk24Bit, formattedChunk);
       if (verbose) printf("chunk24[%d]:\t%s\n", i/3,formattedChunk);
 
       for (int jj=0; jj<4; jj++){
@@ -64,14 +63,28 @@ char* base64_decode(char* data, size_t inputSize, bool verbose){
   for (int i=0; i<64; i++){
     BASE64INVERSE[BASE64[i]] = i;
   }
-/*
+
+  // i = input idx; j = output idx; jj = inx inside the chunk;
   for (int i=0,j=0; i < inputSize; i++) {
     sixtets[i%4] = BASE64INVERSE[data[i]]; 
-    for (int jj=0, j < 4; j++){
-      sixtets[jj] = data[i];
-    }
-    char* si= *data;
+    if(verbose) printf("sixtet[%d][%d]:\t%06b\n", i/4, i%4, sixtets[i%4]);
 
+    if (i%4==3 | i == inputSize-1){
+      int chunk24Bit = (sixtets[0] << 18) + (sixtets[1] << 12) + (sixtets[2] << 6) + sixtets[3];
+
+      char* formattedChunk = (char*)malloc(sizeof(char) * 30);
+      formattedChunk = format24bits(chunk24Bit, formattedChunk);
+      if (verbose) printf("chunk24[%d]:\t%s\n", i/4,formattedChunk);
+ //     if (verbose) printf("chunk24[%d]:\t%024b\n", i/4,chunk24Bit);
+      free(formattedChunk);
+
+      for (int jj=0; jj<3;jj++) {
+        octets[jj] = (chunk24Bit >> (2-jj)*8) & 0xFF;
+        decoded[j++] = octets[jj]; 
+      } 
+    }
   }
-  */
+
+  return decoded;
+  
 }
