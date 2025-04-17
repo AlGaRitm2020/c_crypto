@@ -18,8 +18,6 @@ static struct argp_option options[] = {
     {"generate", 'g', 0, 0, "Generate keys PUBLIC and PRIVATE"},
     {"encode", 'e', 0, 0, "Encrypt input "},
     {"decode", 'd', 0, 0, "Decode input"},
-    {"base64", '4', 0, 0, "Base64 encoding (default)"},
-    {"base32", '2', 0, 0, "Base32 encoding"},
     {0}
 };
 
@@ -27,10 +25,7 @@ static struct argp_option options[] = {
 struct arguments {
     char *output_file;
     int verbose;
-    int encode;  // 1 for encode, 0 for decode
-    int base64;  // 1 for base64, 0 for base32 
-    char **input_files;
-    int input_files_count;
+    int mode;  // 0 for gen, 1 for encode, 2 for decode 
 };
 
 /* Parse a single option */
@@ -44,31 +39,29 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case 'o':
             arguments->output_file = arg;
             break;
+        case 'g':
+            arguments->mode = 0;
+            break;
         case 'e':
-            arguments->encode = 1;
+            arguments->mode= 1;
             break;
         case 'd':
-            arguments->encode = 0;
+            arguments->mode= 2;
             break;
-        case '4':
-            arguments->base64= 1;
-            break;
-        case '2':
-            arguments->base64= 0;
-            break;
+        
             
         case ARGP_KEY_ARG:
             // Handle non-option arguments (filenames)
-            arguments->input_files = realloc(arguments->input_files, (arguments->input_files_count + 1) * sizeof(char *));
-            arguments->input_files[arguments->input_files_count++] = arg;
-            break;
-            
-        case ARGP_KEY_END:
+            // arguments->input_files = realloc(arguments->input_files, (arguments->input_files_count + 1) * sizeof(char *));
+            // arguments->input_files[arguments->input_files_count++] = arg;
+            // break;
+            //
+        // case ARGP_KEY_END:
             // Handle end of arguments
-            if (arguments->input_files_count == 0) {
-                // No input files specified, read from stdin
-            }
-            break;
+            // if (arguments->input_files_count == 0) {
+            //     // No input files specified, read from stdin
+            // }
+            // break;
             
         default:
             return ARGP_ERR_UNKNOWN;
@@ -84,12 +77,8 @@ int main(int argc, char **argv) {
     struct arguments arguments;
     
     /* Default values */
-    arguments.output_file = "-";  // Default to stdout
     arguments.verbose = 0;
-    arguments.encode = 1;  // Default to encode mode
-    arguments.base64= 1;  // Default to encode mode
-    arguments.input_files = NULL;
-    arguments.input_files_count = 0;
+    arguments.mode= 1;  // Default to encode mode
     
     /* Parse arguments */
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
@@ -114,37 +103,24 @@ int main(int argc, char **argv) {
 
     
     /* Program logic goes here */
-    if(verbose) printf("Running in %s mode (encoding: %s)\n", arguments.encode ? "encode" : "decode", arguments.base64 ? "base64" : "base32");
+    // if(verbose) printf("Running in %s mode\n", arguments.encode ? "encode" : "decode");
     
-    if (arguments.encode && arguments.base64) { // base64 encod3
+    if (arguments.mode == 0) { // generate 
     //
-         mpz_t n ,two; 
-        mpz_init(n);
-        mpz_init(two);
-        //
-         printf("old n= %Zd \n",n); 
-        mpz_set_ui(n, 10); 
-        mpz_set_ui(two, 2); 
-
-         gmp_printf("old n= %Zd \n",n); 
-         rsa_encode(buffer, charsCount, n, two);
+        rsa_gen_key(512, "hello", "hello");
         
-        gmp_printf("new 2^10 mod 10 = %Zd \n",n); 
-
-        mpz_clear(n);
-        mpz_clear(two);
     
 //    getline(kk);
     }
-    else if (!arguments.encode && arguments.base64) { // base64 decode
+    else if (arguments.mode == 1) { // encode 
 
     }
-    else if(arguments.encode && !arguments.base64){
+    else if( arguments.mode == 2) {  //decode
     }
-    else if(!arguments.encode && !arguments.base64){
+    else if(!arguments.mode ){
     }   
     /* Clean up */
-    free(arguments.input_files);
+    // free(arguments.input_files);
     
     return 0;
 }
