@@ -117,6 +117,7 @@ int main(int argc, char **argv) {
     
     }
     else if( arguments.mode == 2) {  //decode
+      rsa_decode(buffer, charsCount, "hello", verbose);
     }
     else if(!arguments.mode ){
     }   

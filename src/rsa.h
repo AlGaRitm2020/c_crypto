@@ -22,6 +22,7 @@ void rsa_save_key(mpz_t n, mpz_t exp, char* filename, int verbose);
 void rsa_encrypt(mpz_t ciphertext, const char *plaintext, size_t len, RSAKey *public_key);
 
 void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose); 
+void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) ;
 void rsa_decrypt(char **plaintext, size_t *len, mpz_t ciphertext, RSAKey *private_key);
 
 /* Padding functions */
