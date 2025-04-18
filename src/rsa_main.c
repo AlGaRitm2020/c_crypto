@@ -16,7 +16,7 @@ static struct argp_option options[] = {
     {"verbose", 'v', 0, 0, "Produce verbose output"},
     {"output", 'o', "FILE", 0, "Output to FILE instead of stdout"},
     {"generate", 'g', 0, 0, "Generate keys PUBLIC and PRIVATE"},
-    {"encode", 'e', 0, 0, "Encrypt input "},
+  {"encode", 'e', 0, 0, "Encrypt input "},
     {"decode", 'd', 0, 0, "Decode input"},
     {0}
 };
@@ -107,13 +107,14 @@ int main(int argc, char **argv) {
     
     if (arguments.mode == 0) { // generate 
     //
-        rsa_gen_key(512, "hello", "hello");
+        rsa_gen_key(512, "hello.pub", "hello", verbose);
         
     
 //    getline(kk);
     }
     else if (arguments.mode == 1) { // encode 
-
+      rsa_encode(buffer, charsCount, "hello.pub", verbose);
+    
     }
     else if( arguments.mode == 2) {  //decode
     }
