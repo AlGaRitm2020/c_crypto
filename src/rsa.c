@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
+#include <stdint.h>
 
 void rsa_save_key(mpz_t n, mpz_t exp, char* filename, int verbose) {
   if (verbose) printf("SAVING TO %s...\n", filename);
@@ -79,13 +80,42 @@ void rsa_gen_key(int bits, char* pubKeyFile, char* priKeyFile, int verbose) {
 
 void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
       // fast_power_mod(n, e, ten, ten);
-  mpz_t n, e;
-  mpz_inits(n,e,NULL);
+  mpz_t n, e, c, m;
+  mpz_inits(n,e, c, m,NULL);
   
   rsa_load_key(n, e, pubKeyFile, verbose);
+  
+  mpz_set_ui(m, 0);
+  gmp_printf("octal m: %Zo\n", m);
+  mpz_t chunk, local_c; 
+  mpz_inits(chunk, local_c, NULL);
+  for (int j=0; (j < (size/8)+1) ;j++)
+  {
+    // uint64_t chunk = 0;
+    mpz_set_ui(chunk, 0);
+    for (int i=0; (i < 8); i++) {
+      // chunk = (chunk << 8) | (unsigned char)message[i];
+      mpz_mul_2exp(chunk, chunk, 8); // equal to chunk = chunk << 8
+      if (i < size)
+        mpz_add_ui(chunk, chunk, (unsigned char)message[i]);
+
+    gmp_printf("chunk%d:\t%16.16Zx\n",i, chunk);
+    }
+    
+
+    fast_power_mod(local_c, chunk, e, n);
+    mpz_add(c, c, local_c);
+    // mpz_mul_ui(c,c, 18446744073709551616);
+    mpz_mul_2exp(c,c,64);
+    gmp_printf("oct m:\t%Zd\n", c);
+
+  }
 
 
-  printf("ok"); 
-  mpz_clears(n,e,NULL);
+  // fast_power_mod(c, m, e, n);
+
+  // printf("%u\n", (unsigned long long)chunk); 
+  gmp_printf("ciphertext: %8.8Zd\n", c); 
+  mpz_clears(n,e, chunk, m,c, local_c,NULL);
 }
 
