@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <string.h>
 
+
+#define CHUNKSIZE 8 
 void rsa_save_key(mpz_t n, mpz_t exp, char* filename, int verbose) {
   if (verbose) printf("SAVING TO %s...\n", filename);
   char* mode = "w";
@@ -105,16 +107,16 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
   mpz_inits(chunk, local_c, NULL);
   char* ci = (char*)malloc(1000*sizeof(char)); 
   ci[0] = '\0';
-  int chunkSize = 32; // in bytes. so 16B = 128b 
-  for (int j=0; (j < (size/(chunkSize))+1) ;j++)
+  // int CHUNKSIZE = 8; // in bytes. so 16B = 128b 
+  for (int j=0; (j < (size/(CHUNKSIZE))+1) ;j++)
   {
     // uint64_t chunk = 0;
     mpz_set_ui(chunk, 0);
-    for (int i=0; (i < chunkSize); i++) {
+    for (int i=0; (i < CHUNKSIZE); i++) {
       // chunk = (chunk << 8) | (unsigned char)message[i];
-      mpz_mul_2exp(chunk, chunk, 8); // equal to chunk = chunk << 8
+      mpz_mul_2exp(chunk, chunk, 8); // equal to chunk = chunk << 
       if (i < size)
-        mpz_add_ui(chunk, chunk, (unsigned char)message[i+(j*8)]);
+        mpz_add_ui(chunk, chunk, (unsigned char)message[i+(j*CHUNKSIZE)]);
 
     if (verbose) gmp_printf("chunk%d:\t%16.16Zx\n",i, chunk);
     }
@@ -145,38 +147,57 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
   mpz_inits(n,d, c, m,NULL);
   
   rsa_load_key(n, d, priKeyFile, verbose);
-  // char* str_chunk = (char*)malloc();
-  // getdelim(char **__restrict lineptr, size_t *__restrict n, int delimiter, FILE *__restrict stream)
-  mpz_set_str(m, ciphertext, 10);
-  gmp_printf("ciphertext: %Zd\n", m);
-  //
-  // mpz_set_ui(c, 0);
-  // gmp_printf("octal c: %Zo\n", c);
-  // mpz_t chunk, local_m; 
-  // mpz_inits(chunk, local_m, NULL);
-  // for (int j=0; (j < (size/8)+1) ;j++)
-  // {
-  //   // uint64_t chunk = 0;
-  //   mpz_set_ui(chunk, 0);
-  //   for (int i=0; (i < 8); i++) {
-  //     // chunk = (chunk << 8) | (unsigned char)message[i];
-  //     mpz_mul_2exp(chunk, chunk, 8); // equal to chunk = chunk << 8
-  //     if (i < size)
-  //       mpz_add_ui(chunk, chunk, (unsigned char)message[i]);
-  //
-  //   gmp_printf("chunk%d:\t%16.16Zx\n",i, chunk);
-  //   }
-  //
-  //
-  //   fast_power_mod(local_c, chunk, e, n);
-  //   mpz_add(c, c, local_c);
-  //   // mpz_mul_ui(c,c, 18446744073709551616);
-  //   mpz_mul_2exp(c,c,64);
-  //   gmp_printf("oct m:\t%Zd\n", c);
-  //
-  // }
-  // gmp_printf("ciphertext: %8.8Zd\n", c); 
-  // mpz_clears(n,d, chunk, m,c, local_m,NULL);
+  
+  const char delim[] = "|"; 
+  int cnt=0;
+  for(int i=0; i< size; i++)
+    if (ciphertext[i] == delim[0]) cnt++; 
+
+  // getdelim(&str_chunk, &lineSize, int delimiter, FILE *__restrict stream)
+  // mpz_set_str(m, ciphertext, 10);
+  // gmp_printf("ciphertext: %Zd\n", m);
+  printf("number of chunks: %d\n", cnt);
+
+  //tokens = (char **)malloc(cnt * sizeof(char *));
+  int i = 0;
+  char* token;
+  token = strtok(ciphertext, delim);
+
+  char message[1000];
+
+  while (token != NULL) {
+        if(verbose) printf("token%d: %s\n",i, token);
+
+        mpz_t chunk_c, chunk_m;
+        mpz_inits(chunk_c, chunk_m, NULL);
+        mpz_set_str(chunk_c, token, 16);
+        mpz_set_ui(chunk_m, 0);
+
+        gmp_printf("chunk[%d] encrypted: %Zx\n", i, chunk_c);
+        fast_power_mod(chunk_m, chunk_c, d, n);
+        gmp_printf("chunk[%d] decrypted: %Zx\n", i, chunk_m);
+    
+        char symbol; 
+        mpz_t single_char_mpz;
+        mpz_init(single_char_mpz);
+        gmp_printf("cx\n");
+        for (int j=0; j <  CHUNKSIZE;j++ ){
+          mpz_div_2exp(single_char_mpz, chunk_m, ((CHUNKSIZE-1)- j)*8);
+          mpz_mod_ui(single_char_mpz, single_char_mpz, 256);
+          gmp_printf("single char[%d]: %Zd\n", j, single_char_mpz);
+          gmp_printf("single char[%d]: %Zc\n", j, single_char_mpz);
+          message[j+ (i*CHUNKSIZE)] = (unsigned char)mpz_get_ui(single_char_mpz);
+        // gmp_printf("cy\n");
+        }
+        printf("message: %s\n", message);
+        mpz_clear(single_char_mpz);
+        
+        token = strtok(NULL, delim);
+        i++;
+        mpz_clears(chunk_m, chunk_c, NULL);
+        
+    }
+
   mpz_clears(n,d,m,c, NULL);
 }
 
