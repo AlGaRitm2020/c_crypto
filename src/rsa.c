@@ -126,9 +126,10 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
     gmp_printf("local_c: %Zx\n",local_c);
     char temp_ci[200];
     gmp_sprintf(temp_ci, "%Zx|", local_c);
+    gmp_printf("temp ci: %s\n",temp_ci);
     char *tmp = realloc(ci, sizeof(char) * (strlen(ci) + 200));
-    strcat(ci, temp_ci);
     ci = tmp;
+    strcat(ci, temp_ci);
                  
     mpz_add(c, c, local_c);
     mpz_mul_2exp(c,c,64);
