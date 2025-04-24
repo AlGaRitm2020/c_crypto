@@ -105,7 +105,7 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
   mpz_set_ui(m, 0);
   mpz_t chunk, local_c; 
   mpz_inits(chunk, local_c, NULL);
-  char* ci = (char*)malloc(1000*sizeof(char)); 
+  char* ci = (char*)malloc(2000*sizeof(char)); 
   ci[0] = '\0';
   // int CHUNKSIZE = 8; // in bytes. so 16B = 128b 
   for (int j=0; (j < (size/(CHUNKSIZE))+1) ;j++)
@@ -124,8 +124,8 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
 
     fast_power_mod(local_c, chunk, e, n);
     gmp_printf("local_c: %Zx\n",local_c);
-    char temp_ci[200];
-    gmp_sprintf(temp_ci, "%Zx|", local_c);
+    char temp_ci[2000];
+    gmp_sprintf(temp_ci, "%Zxg", local_c);
     gmp_printf("temp ci: %s\n",temp_ci);
     char *tmp = realloc(ci, sizeof(char) * (strlen(ci) + 200));
     ci = tmp;
@@ -149,7 +149,7 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
   
   rsa_load_key(n, d, priKeyFile, verbose);
   
-  const char delim[] = "|"; 
+  const char delim[] = "g"; 
   int cnt=0;
   for(int i=0; i< size; i++)
     if (ciphertext[i] == delim[0]) cnt++; 

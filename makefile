@@ -7,6 +7,9 @@ rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 base: obj/base.o obj/base_main.o
 	$(CC) -o base_program obj/base_main.o obj/base.o
 
+stribog: src/stribog.c
+	$(CC) -o stribog src/stribog.c  
+
 obj/base.o: src/base.c src/base.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/base.c -o obj/base.o
