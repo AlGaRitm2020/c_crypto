@@ -132,6 +132,33 @@ uint64_t S1_64(uint64_t w) {
   return ROTR64(w, 14) ^ ROTR64(w, 18) ^ ROTR64(w, 41);  
 }
 
+// uint32_t Ch(uint32_t x,uint32_t y, uint32_t z) {
+//   return (x & y) ^ (~x & z);
+// }
+
+uint32_t Ch(uint32_t x, uint32_t y, uint32_t z) {
+  return (x & y) ^ (~x & z);
+}
+
+// #define Ch(x, y, z)  (((x) & (y)) ^ (~(x) & (z)))
+#define Maj(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+
+void print_hashes(uint32_t* H, uint32_t T1, uint32_t T2, uint32_t ch, uint32_t maj, uint32_t s0, uint32_t s1, uint32_t k, uint32_t w, int stage) {
+  char* alpha = "ABCDEFGH"; 
+  printf("STAGE %d\n");
+    printf("S1 = %32.32b\n",s1); 
+    printf("S0 = %32.32b\n",s0); 
+    printf("ch = %32.32b\n",ch); 
+    printf("maj= %32.32b\n",maj); 
+    printf("k  = %32.32b\n",k); 
+    printf("w  = %32.32b\n",w); 
+    printf("T1 = %32.32b\n",T1); 
+    printf("T2 = %32.32b\n",T2); 
+  for (int i=0 ; i < 8 ; i++) {
+    printf("%c = %32.32b\n", alpha[i], H[i]); 
+  }
+}
+
 void parse(void **data, uint64_t len, int hashsize ) {
   // if (hashsize == 256) 
   //   typedef uint8_t block[512];
@@ -170,12 +197,53 @@ void parse(void **data, uint64_t len, int hashsize ) {
     g = H[6];
     h = H[7];
 
-    // for (int t=0; t < 63; t++) {
-    //   uint32_t T1 = h + S1_32(e) + Ch(e,f,g) + 
-    // }
-    //
+    for (int t=0; t < 64; t++) {
+      uint32_t T1 = h + S1_32(e) + Ch(e,f,g) + k[t] + w[t];  
+      uint32_t T2 = S0_32(a) + Maj(a,b,c);  
+      if (t < 3333) {
+    printf("STAGE %d\n", t);
+    printf("S1 = %32.32b\n",S1_32(e)); 
+    printf("S0 = %32.32b\n",S0_32(a)); 
+    printf("ch = %32.32b\n",Ch(e,f,g)); 
+    printf("maj= %32.32b\n",Maj(a,b,c)); 
+    printf("k  = %32.32b\n",k[t]); 
+    printf("w  = %32.32b\n",w[t]); 
+    printf("T1 = %32.32b\n",T1); 
+    printf("T2 = %32.32b\n",T2);
+    printf("a  = %32.32b\n",a); 
+    printf("b  = %32.32b\n",b); 
+    printf("c  = %32.32b\n",c); 
+    printf("d  = %32.32b\n",d); 
+    printf("e  = %32.32b\n",e); 
+    printf("f  = %32.32b\n",f); 
+    printf("g  = %32.32b\n",g); 
+    printf("h  = %32.32b\n",h); 
+      }
+      h = g;
+      g = f;
+      f = e;
+      e = d + T1;
+      d = c;
+      c = b; 
+      b = a;
+      a = T1 + T2;
+    }
+    H[0]+=a;
+    H[1]+=b;
+    H[2]+=c;
+    H[3]+=d;
+    H[4]+=e;
+    H[5]+=f;
+    H[6]+=g;
+    H[7]+=h;
   
   }
+  //result
+  printf("\n\n Final sha256 hash is::::: ");
+  for(int i=0; i < 8; i++)
+    printf("%8.8x", H[i]);
+  printf("\n");
+  
   free(w);
 } 
 int main() {
