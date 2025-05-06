@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I./src -lgmp -Wall -Wextra
+CFLAGS = -I./src -lgmp 
 
 rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 	$(CC) -o rsa obj/rsa_main.o obj/rsa.o obj/essential_func.o -lgmp

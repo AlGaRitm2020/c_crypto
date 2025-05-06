@@ -40,11 +40,15 @@ void Pad(void** data, uint64_t len, int hashsize) {
     else
       len_size = 16; 
 
-    uint8_t* new_data = realloc(*data, len + 1 + k + len_size);
+    printf("T2trying to reallocate %d bytes", len + 1 + k + len_size);
+    printf("trying to reallocate %d byteslen:%d, k:%d, len_size:%d", len + 1 + k + len_size, len, len, len);
+    // uint8_t* new_data = realloc(*data, len + 1 + k + len_size);
+    uint8_t* new_data = (uint8_t*)malloc(len + 1 + k + len_size);
     if (!new_data) {
         perror("realloc failed");
         exit(EXIT_FAILURE);
     }
+    memcpy(new_data, *data, len); 
     
     *data = new_data; // Update caller's pointer
     
@@ -106,7 +110,7 @@ void sha256(void **data, uint64_t len, void** out_hash) {
       }
       else 
         w[t] = s1_32(w[t-2]) + w[t-7] + s0_32(w[t-15]) + w[t-16];  
-      printf("W[%d]: %8.8x\t\t\t",t, w[t]);
+      // printf("W[%d]: %8.8x\t\t\t",t, w[t]);
       
     }
     uint32_t a,b,c,d,e,f,g,h;
