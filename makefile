@@ -1,11 +1,19 @@
 CC = gcc
-CFLAGS = -I./src -lgmp
+CFLAGS = -I./src -lgmp -Wall -Wextra
 
 rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 	$(CC) -o rsa obj/rsa_main.o obj/rsa.o obj/essential_func.o -lgmp
 
 base: obj/base.o obj/base_main.o
 	$(CC) -o base_program obj/base_main.o obj/base.o
+
+hmac: obj/sha.o obj/hmac.o
+	$(CC) -o hmac obj/hmac.o obj/sha.o 
+obj/hmac.o: src/hmac.c 
+	$(CC) $(CFLAGS) -c src/hmac.c -o obj/hmac.o
+
+obj/sha.o: src/sha.c src/sha.h 
+	$(CC) $(CFLAGS) -DSHA_LIB=1 -c src/sha.c -o obj/sha.o
 
 sha: src/sha.c
 	$(CC) -o sha src/sha.c  
