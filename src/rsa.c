@@ -1,5 +1,6 @@
 #include "essential_func.h"
 #include "rsa.h"
+// #include <cstdint>
 #include <gmp.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -95,31 +96,70 @@ void rsa_gen_key(int bits, char* pubKeyFile, char* priKeyFile, int verbose) {
     mpz_clears( x,y,gcd,p,q,n,phi,e, p_minus_one, q_minus_one, NULL);
 }
 
+void pkcs7_pad(uint8_t *data, size_t data_len, uint8_t* padded_data, size_t* total_len, size_t BLOCKSIZE) {
+  uint8_t pad_len = BLOCKSIZE - (data_len % BLOCKSIZE);
+  *total_len = data_len + pad_len;
+  memcpy(padded_data, data, data_len);  
+  memset(padded_data+data_len, pad_len, pad_len);  
+ 
+}
+
+int pkcs7_unpad(uint8_t* padded_data, size_t total_len, uint8_t* data, size_t* data_len) {
+  if (total_len == 0) return 1;
+
+  uint8_t pad_len = padded_data[total_len-1]; 
+  *data_len = total_len - pad_len; 
+  for (int i=*data_len ; i < total_len; i++) {
+    if (padded_data[i] != pad_len) return 1; 
+  } 
+
+  memcpy(data, padded_data, *data_len);
+  return 0;
+
+}
 void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
       // fast_power_mod(n, e, ten, ten);
   mpz_t n, e, c, m;
   mpz_inits(n,e, c, m,NULL);
   
   rsa_load_key(n, e, pubKeyFile, verbose);
+  // size_t* total_len = NULL;
+  size_t total_len;
+  uint8_t* padded_message = (uint8_t*)malloc( (size/CHUNKSIZE+1)*CHUNKSIZE); 
+
+  pkcs7_pad((uint8_t*)message, size, padded_message, &total_len, (size_t) CHUNKSIZE);
   
+    printf("\npadded_message: "); 
+  for (int i = 0; i < total_len;i++) {
+    printf("%02x",padded_message[i]); 
+  }
+    printf("\n"); 
+
   mpz_set_ui(m, 0);
   mpz_t chunk, local_c; 
   mpz_inits(chunk, local_c, NULL);
   char* ci = (char*)malloc(2000*sizeof(char)); 
   ci[0] = '\0';
   // int CHUNKSIZE = 8; // in bytes. so 16B = 128b 
-  for (int j=0; (j < (size/(CHUNKSIZE))+1) ;j++)
+  for (int j=0; j < (total_len/CHUNKSIZE) ;j++)
   {
     // uint64_t chunk = 0;
     mpz_set_ui(chunk, 0);
+    int remainder = 0xfa;
     for (int i=0; (i < CHUNKSIZE); i++) {
       // chunk = (chunk << 8) | (unsigned char)message[i];
       mpz_mul_2exp(chunk, chunk, 8); // equal to chunk = chunk << 
-      if (i < size)
-        mpz_add_ui(chunk, chunk, (unsigned char)message[i+(j*CHUNKSIZE)]);
+      if (i < total_len) {
+        mpz_add_ui(chunk, chunk, (unsigned char)padded_message[i+(j*CHUNKSIZE)]);
+        remainder--;
+     }
+      
+      // else
+        // mpz_add_ui(chunk, chunk, remainder);
 
-    if (verbose) gmp_printf("chunk%d:\t%16.16Zx\n",i, chunk);
+    // if (verbose) gmp_printf("chunk%d:\t%16.16Zx\n",i, chunk);
     }
+    if (verbose) gmp_printf("chunk%d:\t%16.16Zx\n",j, chunk);
     
 
     fast_power_mod(local_c, chunk, e, n);
@@ -139,6 +179,7 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
   gmp_printf("ci: %s\n", ci); 
   mpz_clears(n,e, chunk, m,c, local_c,NULL);
   free(ci);
+  free(padded_message);
 }
 void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
 
@@ -165,7 +206,7 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
   token = strtok(ciphertext, delim);
 
   char message[1000];
-
+  size_t paded_size=0;
   while (token != NULL) {
         if(verbose) printf("token%d: %s\n",i, token);
 
@@ -177,27 +218,40 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
         gmp_printf("chunk[%d] encrypted: %Zx\n", i, chunk_c);
         fast_power_mod(chunk_m, chunk_c, d, n);
         gmp_printf("chunk[%d] decrypted: %Zx\n", i, chunk_m);
+
     
         char symbol; 
         mpz_t single_char_mpz;
         mpz_init(single_char_mpz);
         gmp_printf("cx\n");
-        for (int j=0; j <  CHUNKSIZE;j++ ){
+
+        token = strtok(NULL, delim);
+        if (token == NULL && mpz_cmp_ui(chunk_m, 0) == 0)
+          continue;
+     
+        for (int j=0; j <  CHUNKSIZE ;j++ ){
           mpz_div_2exp(single_char_mpz, chunk_m, ((CHUNKSIZE-1)- j)*8);
           mpz_mod_ui(single_char_mpz, single_char_mpz, 256);
-          gmp_printf("single char[%d]: %Zd\n", j, single_char_mpz);
+          gmp_printf("single char[%d]: 0x%02Zx\n", j, single_char_mpz);
           gmp_printf("single char[%d]: %Zc\n", j, single_char_mpz);
+          paded_size++;
           message[j+ (i*CHUNKSIZE)] = (unsigned char)mpz_get_ui(single_char_mpz);
         // gmp_printf("cy\n");
         }
         printf("message: %s\n", message);
-        mpz_clear(single_char_mpz);
+       mpz_clear(single_char_mpz);
         
-        token = strtok(NULL, delim);
-        i++;
-        mpz_clears(chunk_m, chunk_c, NULL);
+       i++;
+       mpz_clears(chunk_m, chunk_c, NULL);
         
     }
+        uint8_t* unpaded = (uint8_t*)malloc(paded_size); 
+        size_t data_len;
+        printf("sizeof_padded = %d or %d?\n", sizeof(message), paded_size);
+        pkcs7_unpad((uint8_t*)message,paded_size, unpaded, &data_len); 
+        printf("unpaded message: %s\n", (char*)unpaded);
+     
+
 
   mpz_clears(n,d,m,c, NULL);
 }
