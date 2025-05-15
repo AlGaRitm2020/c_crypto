@@ -117,7 +117,7 @@ int pkcs7_unpad(uint8_t* padded_data, size_t total_len, uint8_t* data, size_t* d
   return 0;
 
 }
-void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
+void rsa_encode(char* message, size_t size, char* pubKeyFile, char** enc_message, size_t* enc_message_len, int verbose) {
       // fast_power_mod(n, e, ten, ten);
   mpz_t n, e, c, m;
   mpz_inits(n,e, c, m,NULL);
@@ -175,14 +175,18 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, int verbose) {
     mpz_mul_2exp(c,c,64);
 
   }
-  gmp_printf("ciphertext: %Zx\n", c); 
+  // gmp_printf("ciphertext: %Zx\n", c); 
   gmp_printf("ci: %s\n", ci); 
+  *enc_message = (char*)realloc(*enc_message, strlen(ci));
+  strcpy(*enc_message , ci);
+  *enc_message_len = strlen(ci);
+
   mpz_clears(n,e, chunk, m,c, local_c,NULL);
   free(ci);
   free(padded_message);
 }
-void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
 
+void rsa_decode(char* ciphertext, size_t size, char* priKeyFile,char** dec_message, size_t* dec_message_len, int verbose){ 
 
       // fast_power_mod(n, e, ten, ten);
   mpz_t n, d, c, m;
@@ -250,8 +254,12 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile, int verbose) {
         printf("sizeof_padded = %d or %d?\n", sizeof(message), paded_size);
         pkcs7_unpad((uint8_t*)message,paded_size, unpaded, &data_len); 
         printf("unpaded message: %s\n", (char*)unpaded);
-     
 
+  *dec_message = (char*)realloc(*dec_message, sizeof(unpaded));     
+  strcpy(*dec_message, (char*)unpaded);
+  *dec_message_len = strlen((char*)unpaded);
+
+        
 
   mpz_clears(n,d,m,c, NULL);
 }

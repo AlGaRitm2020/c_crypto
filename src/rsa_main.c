@@ -113,12 +113,21 @@ int main(int argc, char **argv) {
 //    getline(kk);
     }
     else if (arguments.mode == 1) { // encode 
-      rsa_encode(buffer, charsCount, "hello.pub", verbose);
-    
+      char* encrypted = (char*)malloc(100);
+      if (encrypted == NULL) return 1;
+      size_t enc_size = 0;
+      rsa_encode(buffer, charsCount, "hello.pub", &encrypted, &enc_size, verbose);
+      printf("ENCR in main. CIPTHERTEXT: %s, SIZE: %d", encrypted, (int)enc_size); 
     }
     else if( arguments.mode == 2) {  //decode
-      rsa_decode(buffer, charsCount, "hello", verbose);
-    }
+      char* decrypted = (char*)malloc(10);
+      if (decrypted == NULL) return 1;
+      size_t dec_size = 0;   
+
+      rsa_decode(buffer, charsCount, "hello", &decrypted, &dec_size, verbose);
+    
+      printf("DECR in main. CIPTHERTEXT: %s, SIZE: %d", decrypted, (int)dec_size); 
+  }
     else if(!arguments.mode ){
     }   
     /* Clean up */
