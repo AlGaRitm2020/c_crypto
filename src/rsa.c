@@ -12,7 +12,7 @@
 #include <string.h>
 
 
-#define CHUNKSIZE 8 
+#define CHUNKSIZE 32 
 void rsa_save_key(mpz_t n, mpz_t exp, char* filename, int verbose) {
   if (verbose) printf("SAVING TO %s...\n", filename);
   char* mode = "w";
@@ -177,7 +177,7 @@ void rsa_encode(char* message, size_t size, char* pubKeyFile, char** enc_message
   }
   // gmp_printf("ciphertext: %Zx\n", c); 
   gmp_printf("ci: %s\n", ci); 
-  *enc_message = (char*)realloc(*enc_message, strlen(ci));
+  *enc_message = (char*)realloc(*enc_message, strlen(ci)+1);
   strcpy(*enc_message , ci);
   *enc_message_len = strlen(ci);
 
@@ -220,7 +220,7 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile,char** dec_messa
         mpz_set_ui(chunk_m, 0);
 
         gmp_printf("chunk[%d] encrypted: %Zx\n", i, chunk_c);
-        fast_power_mod(chunk_m, chunk_c, d, n);
+        if(verbose)fast_power_mod(chunk_m, chunk_c, d, n);
         gmp_printf("chunk[%d] decrypted: %Zx\n", i, chunk_m);
 
     
@@ -236,13 +236,13 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile,char** dec_messa
         for (int j=0; j <  CHUNKSIZE ;j++ ){
           mpz_div_2exp(single_char_mpz, chunk_m, ((CHUNKSIZE-1)- j)*8);
           mpz_mod_ui(single_char_mpz, single_char_mpz, 256);
-          gmp_printf("single char[%d]: 0x%02Zx\n", j, single_char_mpz);
-          gmp_printf("single char[%d]: %Zc\n", j, single_char_mpz);
+          if(verbose)gmp_printf("single char[%d]: 0x%02Zx\n", j, single_char_mpz);
+          if(verbose)gmp_printf("single char[%d]: %Zc\n", j, single_char_mpz);
           paded_size++;
           message[j+ (i*CHUNKSIZE)] = (unsigned char)mpz_get_ui(single_char_mpz);
         // gmp_printf("cy\n");
         }
-        printf("message: %s\n", message);
+        if(verbose) printf("message: %s\n", message);
        mpz_clear(single_char_mpz);
         
        i++;
@@ -253,7 +253,7 @@ void rsa_decode(char* ciphertext, size_t size, char* priKeyFile,char** dec_messa
         size_t data_len;
         printf("sizeof_padded = %d or %d?\n", sizeof(message), paded_size);
         pkcs7_unpad((uint8_t*)message,paded_size, unpaded, &data_len); 
-        printf("unpaded message: %s\n", (char*)unpaded);
+        printf("UNPADDED : %s\n", (char*)unpaded);
 
   *dec_message = (char*)realloc(*dec_message, sizeof(unpaded));     
   strcpy(*dec_message, (char*)unpaded);

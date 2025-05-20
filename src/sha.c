@@ -40,8 +40,8 @@ void Pad(void** data, uint64_t len, int hashsize) {
     else
       len_size = 16; 
 
-    printf("T2trying to reallocate %d bytes", len + 1 + k + len_size);
-    printf("trying to reallocate %d byteslen:%d, k:%d, len_size:%d", len + 1 + k + len_size, len, len, len);
+    // printf("T2trying to reallocate %d bytes", len + 1 + k + len_size);
+    // printf("trying to reallocate %d byteslen:%d, k:%d, len_size:%d", len + 1 + k + len_size, len, len, len);
     // uint8_t* new_data = realloc(*data, len + 1 + k + len_size);
     uint8_t* new_data = (uint8_t*)malloc(len + 1 + k + len_size);
     if (!new_data) {
@@ -64,9 +64,9 @@ void Pad(void** data, uint64_t len, int hashsize) {
     memcpy(new_data + len + 1 + k, len_bytes, len_size);
     
     // Debug print
-    for (int i = 0; i < len + 1 + k + len_size; i++) {
-        printf("byte[%d]=%02x\t\t", i, new_data[i]);
-    }
+    // for (int i = 0; i < len + 1 + k + len_size; i++) {
+    //     printf("byte[%d]=%02x\t\t", i, new_data[i]);
+    // }
     
     printf("\nk:%d, l:%d, total: %d\n", k, len, len+1+k+len_size);
     printf("bitlen: %d, lensize: %d\n", bit_len, len_size);
@@ -91,8 +91,6 @@ void sha256(void **data, uint64_t len, void** out_hash) {
   int step =  64; // step in data pointer (for block dividing)
   uint8_t* block = (uint8_t*)(*data);
   uint32_t* w = (uint32_t*)malloc(sizeof(uint32_t) * step);
-  assert(ROTR32(0x80000000, 1) == 0x40000000);
-  assert(ROTR32(0x00000001, 31) == 0x00000002);
 
   // uint32_t* H = (uint32_t*)malloc(sizeof(uint32_t) * 8);
   // H = H256;
@@ -111,7 +109,6 @@ void sha256(void **data, uint64_t len, void** out_hash) {
       else 
         w[t] = s1_32(w[t-2]) + w[t-7] + s0_32(w[t-15]) + w[t-16];  
       // printf("W[%d]: %8.8x\t\t\t",t, w[t]);
-      
     }
     uint32_t a,b,c,d,e,f,g,h;
     a = H[0];
