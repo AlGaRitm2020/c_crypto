@@ -1,5 +1,8 @@
 CC = gcc
-CFLAGS = -I./src -lgmp 
+CFLAGS =  -g -I./src -lgmp -O0  
+
+sign: obj/sign.o obj/rsa.o obj/essential_func.o obj/sha.o 
+	$(CC) -o sign obj/sign.o obj/rsa.o obj/sha.o obj/essential_func.o -lgmp
 
 rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 	$(CC) -o rsa obj/rsa_main.o obj/rsa.o obj/essential_func.o -lgmp
@@ -9,6 +12,11 @@ base: obj/base.o obj/base_main.o
 
 hmac: obj/sha.o obj/hmac.o
 	$(CC) -o hmac obj/hmac.o obj/sha.o 
+
+obj/sign.o: src/sign.c src/sign.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/sign.c  -o obj/sign.o
+
 obj/hmac.o: src/hmac.c 
 	$(CC) $(CFLAGS) -c src/hmac.c -o obj/hmac.o
 
@@ -43,7 +51,7 @@ obj/base_main.o: src/base_main.c src/base.h
 	$(CC) $(CFLAGS) -c src/base_main.c -o obj/base_main.o
 
 clean:
-	rm -rf obj base_program rsa
+	rm obj/*
 
 run:
 	./base_program -v
