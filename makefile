@@ -1,8 +1,11 @@
 CC = gcc
-CFLAGS =  -g -I./src -lgmp -O0  
+CFLAGS = -g -I./src -lgmp -O0  
 
-sign: obj/sign.o obj/rsa.o obj/essential_func.o obj/sha.o 
+sign: obj/sign.o obj/rsa.o obj/essential_func.o obj/sha.o src/tsa_client.c 
 	$(CC) -o sign obj/sign.o obj/rsa.o obj/sha.o obj/essential_func.o -lgmp
+
+tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
+	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
 
 rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 	$(CC) -o rsa obj/rsa_main.o obj/rsa.o obj/essential_func.o -lgmp
@@ -20,6 +23,15 @@ obj/sign.o: src/sign.c src/sign.h
 obj/hmac.o: src/hmac.c 
 	$(CC) $(CFLAGS) -c src/hmac.c -o obj/hmac.o
 
+obj/tsa_server.o: src/tsa_server.c 
+	$(CC) $(CFLAGS) -c src/tsa_server.c -o obj/tsa_server.o
+
+obj/tsa_client.o: src/tsa_client.c 
+	$(CC) $(CFLAGS) -c src/tsa_client.c -o obj/tsa_client.o
+
+
+
+
 obj/sha.o: src/sha.c src/sha.h 
 	$(CC) $(CFLAGS) -DSHA_LIB=1 -c src/sha.c -o obj/sha.o
 
@@ -32,7 +44,6 @@ stribog: src/stribog.c
 obj/base.o: src/base.c src/base.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/base.c -o obj/base.o
-
 
 obj/rsa_main.o: src/rsa_main.c 
 	mkdir -p obj
@@ -51,7 +62,6 @@ obj/base_main.o: src/base_main.c src/base.h
 	$(CC) $(CFLAGS) -c src/base_main.c -o obj/base_main.o
 
 clean:
-	rm obj/*
+	rm -rf obj/*
 
-run:
-	./base_program -v
+.PHONY: clean

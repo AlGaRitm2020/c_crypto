@@ -1,21 +1,14 @@
 #include "sign.h"
+#include "sha.h"
+#include "rsa.h"
+#include "tsa_client.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <stdint.h>
-#include "rsa.h"
-#include "sha.h"
+#include <sys/stat.h>  // Для mkdir()
+#include <errno.h>     // Для errno
 
-// Ваши функции RSA (предполагается, что они уже есть)
-// extern void rsa_encode(char *message, size_t size, char *pubKeyFile, char **enc_message, size_t *enc_message_len, int verbose);
-// extern void rsa_decode(char *ciphertext, size_t size, char *priKeyFile, char **dec_message, size_t *dec_message_len, int verbose);
-//
-// // Ваши функции хеширования (предполагается, что они уже есть)
-// extern void sha256(const uint8_t *data, size_t len, uint8_t *out);
-// extern void sha512(const uint8_t *data, size_t len, uint8_t *out);
-
-// Чтение файла в память
 static bool read_file(const char *filename, uint8_t **data, size_t *len) {
     FILE *f = fopen(filename, "rb");
     if (!f) return false;
@@ -24,25 +17,34 @@ static bool read_file(const char *filename, uint8_t **data, size_t *len) {
     *len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    *data = (uint8_t*)malloc(*len);
+    *data = malloc(*len);
     if (!*data) {
         fclose(f);
         return false;
     }
-
-    fread(*data, 1, *len, f);
+    
+    size_t read = fread(*data, 1, *len, f);
     fclose(f);
+    return read == *len;
+}
+
+static void get_utc_timestamp(char *timestamp, size_t len) {
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);
+    strftime(timestamp, len, "%Y%m%d%H%M%SZ", tm);
+}
+
+static bool ensure_directory_exists(const char *path) {
+    struct stat st = {0};
+    if (stat(path, &st) == -1) {
+        if (mkdir(path, 0755)) {
+            perror("mkdir");
+            return false;
+        }
+    }
     return true;
 }
 
-// Получение текущего времени в формате UTC
-static void get_timestamp(char *timestamp) {
-    time_t now = time(NULL);
-    struct tm *tm = gmtime(&now);
-    strftime(timestamp, 20, "%Y%m%d%H%M%SZ", tm);
-}
-
-// Подписать файл
 bool cades_sign_file(
     const char *filename,
     const char *private_key_file,
@@ -54,53 +56,57 @@ bool cades_sign_file(
     uint8_t *file_data;
     size_t file_len;
 
-    // 1. Читаем файл
     if (!read_file(filename, &file_data, &file_len)) {
         if (verbose) fprintf(stderr, "Ошибка чтения файла %s\n", filename);
         return false;
     }
-    printf("file data: %s\n", file_data);
 
-    // 2. Вычисляем хеш
-    // uint8_t hash[64]={0}; // SHA-512 требует 64 байта
     size_t hash_len = (hash_algo == HASH_SHA256) ? 32 : 64;
-    uint8_t* hash = (uint8_t*)malloc(hash_len);
-
-    printf("debugbefore SHA\n");
-    if (hash_algo == HASH_SHA256) {
-        sha256((void**)&file_data, file_len, (void**)&hash);
-    } else {
-        sha256((void**)&file_data, file_len, (void**)&hash);
-    }
-
-    printf("debug0.3\n");
-    // 3. Подписываем хеш (шифруем закрытым ключом)
-    char *encrypted_hash = NULL;
-    size_t encrypted_hash_len = 0;
-
-    rsa_encode((char *)hash, hash_len, (char *)private_key_file, &encrypted_hash, &encrypted_hash_len, verbose);
-
-    printf("debug0.4\n");
-    if (!encrypted_hash) {
+    uint8_t* hash = malloc(hash_len);
+    if (!hash) {
         free(file_data);
         return false;
     }
 
-    printf("debug0.5\n");
-    // 4. Заполняем структуру подписи
-    sig->signature = (uint8_t *)encrypted_hash;
-    sig->signature_len = encrypted_hash_len;
-    get_timestamp(sig->timestamp);
-    sig->hash_algo = hash_algo;
-    strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name) - 1);
+    if (hash_algo == HASH_SHA256)
+        sha256((void**)&file_data, file_len, (void**)&hash);
+    else
+        sha256((void**)&file_data, file_len, (void**)&hash);
 
-    printf("file data pointer: %p\n", file_data);
+    // Подписываем хеш RSA
+    char *enc_sig = NULL;
+    size_t enc_len = 0;
+    rsa_encode((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
+
+    // Получаем временную метку от TSA
+    char timestamp[20];
+    get_utc_timestamp(timestamp, sizeof(timestamp));
+
+    uint8_t *ts_signature = NULL;
+    size_t ts_signature_len = 0;
+    if (!request_tsa_signature(hash, hash_len, timestamp, &ts_signature, &ts_signature_len)) {
+        if (verbose) fprintf(stderr, "Ошибка получения временной метки\n");
+        free(hash);
+        free(file_data);
+        free(enc_sig);
+        return false;
+    }
+
+    // Заполняем структуру
+    sig->signature = (uint8_t*)enc_sig;
+    sig->signature_len = enc_len;
+    memcpy(sig->timestamp, timestamp, sizeof(timestamp));
+    sig->hash_algo = hash_algo;
+    strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name)-1);
+    sig->signer_name[sizeof(sig->signer_name)-1] = '\0';
+    sig->ts_signature = ts_signature;
+    sig->ts_signature_len = ts_signature_len;
+
+    free(hash);
     free(file_data);
-    printf("debug0.fin\n");
     return true;
 }
 
-// Проверить подпись
 bool cades_verify_file(
     const char *filename,
     const char *public_key_file,
@@ -115,130 +121,170 @@ bool cades_verify_file(
         return false;
     }
 
-    // 1. Вычисляем хеш
     size_t hash_len = (sig->hash_algo == HASH_SHA256) ? 32 : 64;
-    uint8_t* hash = (uint8_t*)malloc(hash_len);
-
-    if (sig->hash_algo == HASH_SHA256) {
+    uint8_t* hash = malloc(hash_len);
+    if (sig->hash_algo == HASH_SHA256)
+        sha256((void**)&file_data, file_len, (void**)&hash);
+    else
         sha256((void**)&file_data, file_len, (void**)&hash);
 
-    } else {
-        sha256((void**)&file_data, file_len, (void**)&hash);
-    }
-
-    // 2. Расшифровываем подпись (открытым ключом)
+    // Расшифровываем подпись
     char *decrypted_hash = NULL;
-    size_t decrypted_hash_len = 0;
-
-    rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_hash_len, verbose);
+    size_t decrypted_len = 0;
+    rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
 
     if (!decrypted_hash) {
+        free(hash);
         free(file_data);
         return false;
     }
 
-    // 3. Сравниваем хеши
-    printf("decr_hash: %s, tested_hash: %s\n", decrypted_hash, (char*)hash);
-    bool valid = (memcmp(hash, decrypted_hash, hash_len) == 0);
+    // Проверяем подпись
+    bool valid = memcmp(decrypted_hash, hash, hash_len) == 0;
 
+    // Если есть временная метка — проверяем её
+    if (sig->ts_signature && sig->ts_signature_len > 0) {
+        bool ts_valid = verify_tsa_signature(hash, hash_len, sig->timestamp, sig->ts_signature, sig->ts_signature_len);
+        valid &= ts_valid;
+    }
+
+    free(hash);
     free(file_data);
     free(decrypted_hash);
+
     return valid;
 }
 
-// Сохранить подпись в файл
 bool cades_save_signature(const char *filename, const CAdESSignature *sig) {
+    // Проверяем/создаем директорию для подписей
+    char dir_path[256] = {0};
+    strncpy(dir_path, filename, sizeof(dir_path)-1);
+    char *last_slash = strrchr(dir_path, '/');
+    if (last_slash) {
+        *last_slash = '\0';
+        if (!ensure_directory_exists(dir_path)) {
+            return false;
+        }
+    }
+
     FILE *f = fopen(filename, "wb");
-    if (!f) return false;
-
-    // Формат: [алгоритм][длина подписи][подпись][timestamp][имя]
-    fwrite(&sig->hash_algo, sizeof(HashAlgorithm), 1, f);
-    fwrite(&sig->signature_len, sizeof(size_t), 1, f);
-    fwrite(sig->signature, 1, sig->signature_len, f);
-    fwrite(sig->timestamp, 1, 20, f);
-    fwrite(sig->signer_name, 1, 128, f);
-
-    fclose(f);
-    return true;
-}
-
-// Загрузить подпись из файла
-bool cades_load_signature(const char *filename, CAdESSignature *sig) {
-    FILE *f = fopen(filename, "rb");
-    if (!f) return false;
-
-    // Читаем структуру
-    fread(&sig->hash_algo, sizeof(HashAlgorithm), 1, f);
-    fread(&sig->signature_len, sizeof(size_t), 1, f);
-
-    sig->signature = (uint8_t*)malloc(sig->signature_len);
-    if (!sig->signature) {
-        fclose(f);
+    if (!f) {
+        perror("fopen");
         return false;
     }
 
-    
-    fread(sig->signature, 1, sig->signature_len, f);
-    fread(sig->timestamp, 1, 20, f);
-    fread(sig->signer_name, 1, 128, f);
+    bool success = true;
+    success &= fwrite(&sig->hash_algo, sizeof(HashAlgorithm), 1, f) == 1;
+    success &= fwrite(&sig->signature_len, sizeof(size_t), 1, f) == 1;
+    success &= fwrite(sig->signature, 1, sig->signature_len, f) == sig->signature_len;
+    success &= fwrite(sig->timestamp, 1, 20, f) == 20;
+    success &= fwrite(sig->signer_name, 1, sizeof(sig->signer_name), f) == sizeof(sig->signer_name);
+    success &= fwrite(&sig->ts_signature_len, sizeof(size_t), 1, f) == 1;
+    success &= fwrite(sig->ts_signature, 1, sig->ts_signature_len, f) == sig->ts_signature_len;
+
+    if (!success) {
+        perror("fwrite");
+    }
 
     fclose(f);
-    return true;
+    return success;
 }
 
-// Освободить память подписи
-void cades_free_signature(CAdESSignature *sig) {
-    if (sig->signature) {
-        free(sig->signature);
-        sig->signature = NULL;
+bool cades_load_signature(const char *filename, CAdESSignature *sig) {
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        perror("fopen");
+        return false;
     }
+
+    memset(sig, 0, sizeof(CAdESSignature));
+    
+    bool success = true;
+    success &= fread(&sig->hash_algo, sizeof(HashAlgorithm), 1, f) == 1;
+    success &= fread(&sig->signature_len, sizeof(size_t), 1, f) == 1;
+    
+    if (success) {
+        sig->signature = malloc(sig->signature_len);
+        success &= sig->signature != NULL;
+        success &= fread(sig->signature, 1, sig->signature_len, f) == sig->signature_len;
+    }
+    
+    success &= fread(sig->timestamp, 1, 20, f) == 20;
+    success &= fread(sig->signer_name, 1, sizeof(sig->signer_name), f) == sizeof(sig->signer_name);
+    success &= fread(&sig->ts_signature_len, sizeof(size_t), 1, f) == 1;
+    
+    if (success) {
+        sig->ts_signature = malloc(sig->ts_signature_len);
+        success &= sig->ts_signature != NULL;
+        success &= fread(sig->ts_signature, 1, sig->ts_signature_len, f) == sig->ts_signature_len;
+    }
+
+    if (!success) {
+        perror("fread");
+        cades_free_signature(sig);
+    }
+
+    fclose(f);
+    return success;
 }
 
+// Остальные функции (cades_verify_file, cades_free_signature, main) остаются без изменений
+// ...
+//
+void cades_free_signature(CAdESSignature *sig) {
+    if (sig->signature) free(sig->signature);
+    if (sig->ts_signature) free(sig->ts_signature);
+}
 
-// #ifndef SIGN_LIB
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Использование: %s [sign|verify]\n", argv[0]);
+        return 1;
+    }
 
-int main() {
     const char *filename = "env.sh";
     const char *private_key = "hello";
     const char *public_key = "hello.pub";
-    const char *signature_file = "signature.bin";
+    const char *signature_file = "signatures/signature.bin";
 
-    CAdESSignature signature;
-    int verbose = 1;
-    printf("debug1\n");
-    // 1. Подписать файл
-    if (!cades_sign_file(filename, private_key, HASH_SHA256, "Иван Иванов", &signature, verbose)) {
-        printf("Ошибка подписи!\n");
-        return 1;
-    }
+    CAdESSignature sig = {0};
 
-    printf("debug1.1\n");
-    printf("Файл подписан!\n");
-    printf("Автор: %s\n", signature.signer_name);
-    printf("Время: %s\n", signature.timestamp);
+    if (strcmp(argv[1], "sign") == 0) {
+        if (!cades_sign_file(filename, private_key, HASH_SHA256, "Ivan Ivanov", &sig, 1)) {
+            printf("Ошибка подписания!\n");
+            return 1;
+        }
 
-    // 2. Сохранить подпись в файл
-    if (!cades_save_signature(signature_file, &signature)) {
-        printf("Ошибка сохранения подписи!\n");
-        cades_free_signature(&signature);
-        return 1;
-    }
+        if (!cades_save_signature(signature_file, &sig)) {
+            printf("Ошибка сохранения подписи!\n");
+            cades_free_signature(&sig);
+            return 1;
+        }
 
-    // 3. Проверить подпись
-    CAdESSignature loaded_sig;
-    if (!cades_load_signature(signature_file, &loaded_sig)) {
-        printf("Ошибка загрузки подписи!\n");
-        return 1;
-    }
+        printf("Файл успешно подписан.\n");
+        printf("Время: %s\n", sig.timestamp);
+        printf("Автор: %s\n", sig.signer_name);
+        cades_free_signature(&sig);
 
-    if (cades_verify_file(filename, public_key, &loaded_sig, verbose)) {
-        printf("Подпись верна!\n");
+    } else if (strcmp(argv[1], "verify") == 0) {
+        CAdESSignature loaded_sig;
+        if (!cades_load_signature(signature_file, &loaded_sig)) {
+            printf("Не удалось загрузить подпись\n");
+            return 1;
+        }
+
+        bool valid = cades_verify_file(filename, public_key, &loaded_sig, 1);
+        printf("Результат проверки: %s\n", valid ? "Подпись верна" : "Подпись неверна");
+        printf("Алгоритм хеширования: %s\n", loaded_sig.hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
+        printf("Алгоритм подписи: RSA\n");
+        printf("Автор подписи: %s\n", loaded_sig.signer_name);
+        printf("Время создания: %s\n", loaded_sig.timestamp);
+
+        cades_free_signature(&loaded_sig);
     } else {
-        printf("Подпись недействительна!\n");
+        printf("Неизвестный режим: %s\n", argv[1]);
+        return 1;
     }
 
-    cades_free_signature(&signature);
-    cades_free_signature(&loaded_sig);
     return 0;
 }
-// #endif /* ifndef SIGN_LIB */

@@ -107,7 +107,11 @@ int main(int argc, char **argv) {
     
     if (arguments.mode == 0) { // generate 
     //
-        rsa_gen_key(512, "hello.pub", "hello", verbose);
+        char *public_key_file; 
+        char *private_key_file= buffer; 
+        // sprintf(public_key_file, "%s.pub", buffer);
+        // rsa_gen_key(512, public_key_file, private_key_file, verbose);
+        rsa_gen_key(512, "keys/ts.pub", "keys/ts", verbose);
         
     
 //    getline(kk);
