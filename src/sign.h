@@ -10,11 +10,18 @@ typedef enum {
     HASH_SHA512
 } HashAlgorithm;
 
+typedef enum {
+    RSA,
+    EL_GAMAL,
+    RABBIN
+} EncodeAlgorithm;
+
 typedef struct {
     uint8_t *signature;
     size_t signature_len;
     char timestamp[20];
     HashAlgorithm hash_algo;
+    EncodeAlgorithm encode_algo;
     char signer_name[128];
     uint8_t *ts_signature;
     size_t ts_signature_len;
@@ -24,6 +31,7 @@ bool cades_sign_file(
     const char *filename,
     const char *private_key_file,
     HashAlgorithm hash_algo,
+    EncodeAlgorithm encode_algo,
     const char *signer_name,
     CAdESSignature *sig,
     int verbose

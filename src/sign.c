@@ -56,7 +56,8 @@ bool cades_view_signature(const CAdESSignature *sig) {
 
     printf("\n=== Информация о подписи ===\n");
     printf("Автор:        %s\n", sig->signer_name);
-    printf("Алгоритм:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
+    printf("Алгоритм хеша:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
+    printf("Алгоритм шифрования:     %s\n", sig->encode_algo == RSA ? "RSA" : "El-Gamal");
     printf("Время:        ");
     print_formatted_time(sig->timestamp);
     printf("\n");
@@ -72,7 +73,7 @@ bool cades_sign_file(
     const char *filename,
     const char *private_key_file,
     HashAlgorithm hash_algo,
-    // EncodeAlgorithm encode_algo,
+    EncodeAlgorithm encode_algo,
     const char *signer_name,
     CAdESSignature *sig,
     int verbose
@@ -101,7 +102,7 @@ bool cades_sign_file(
     size_t enc_len = 0;
     
     // Вызываем rsa_encode как void функцию
-    // if (encode_algo == RSA) {
+    if (encode_algo == RSA) {
       rsa_encode((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
       if (!enc_sig || enc_len == 0) {
         if (verbose) fprintf(stderr, "Ошибка RSA подписи\n");
@@ -109,11 +110,11 @@ bool cades_sign_file(
         free(file_data);
         return false;
       }
-  // }
-    // else {
-    //    fprintf(stderr, "Неподдерживаемый алгоритм шифрования\n");
-    //    return 1;
-    // }
+  }
+    else {
+       fprintf(stderr, "Неподдерживаемый алгоритм шифрования\n");
+       return false;
+    }
 
     char timestamp[20];
     get_utc_timestamp(timestamp, sizeof(timestamp));
@@ -132,6 +133,7 @@ bool cades_sign_file(
     sig->signature_len = enc_len;
     memcpy(sig->timestamp, timestamp, sizeof(timestamp));
     sig->hash_algo = hash_algo;
+    sig->encode_algo= encode_algo;
     strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name)-1);
     sig->signer_name[sizeof(sig->signer_name)-1] = '\0';
     sig->ts_signature = ts_signature;
@@ -279,7 +281,7 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "sign") == 0) {
         CAdESSignature sig = {0};
-        if (!cades_sign_file(filename, private_key, HASH_SHA256, "Ivan Ivanov", &sig, 1)) {
+        if (!cades_sign_file(filename, private_key, HASH_SHA256, RSA, "Ivan Ivanov", &sig, 1)) {
             printf("Ошибка подписания!\n");
             return 1;
         }
