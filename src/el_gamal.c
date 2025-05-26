@@ -1,242 +1,189 @@
-#include "el_gamal.h"
-#include "essential_func.h"
+#include <gmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <gmp.h>
-#include <arpa/inet.h> // для htonl / ntohl
+#include "essential_func.h"
 
-// Структура для хранения ключей
+typedef struct {
+    mpz_t p;
+    mpz_t alpha;
+    mpz_t beta;
+} PublicKey;
+
+typedef struct {
+    mpz_t a;
+} PrivateKey;
+
 typedef struct {
     mpz_t p;
     mpz_t g;
-    mpz_t x;
-    mpz_t y;
-} ElGamalKey;
+    PublicKey public_key;
+    PrivateKey private_key;
+} ElGamal;
 
-// Сохранение ключа в файл
-static void save_key(const char* filename, const mpz_t p, const mpz_t g, const mpz_t val) {
-    FILE* f = fopen(filename, "w");
-    if (!f) return;
-
-    char buffer[4096];
-
-    int offset = gmp_sprintf(buffer, "%Zd %Zd\n", p, g);
-    offset += gmp_sprintf(buffer + offset, "%Zd\n", val);
-
-    fprintf(f, "%s", buffer);
-    fclose(f);
+void elgamal_init(ElGamal *eg) {
+    mpz_inits(eg->p, eg->g, NULL);
+    mpz_inits(eg->public_key.p, eg->public_key.alpha, eg->public_key.beta, NULL);
+    mpz_init(eg->private_key.a);
 }
 
-// Загрузка ключа из файла
-static int load_key(mpz_t p, mpz_t g, mpz_t val, const char* filename) {
-    FILE* f = fopen(filename, "r");
-    if (!f) return 0;
-
-    char line[4096];
-
-    if (fgets(line, sizeof(line), f) == NULL) {
-        fclose(f);
-        return 0;
-    }
-    if (gmp_sscanf(line, "%Zd %Zd", p, g) != 2) {
-        fclose(f);
-        return 0;
-    }
-
-    if (fgets(line, sizeof(line), f) == NULL) {
-        fclose(f);
-        return 0;
-    }
-    if (gmp_sscanf(line, "%Zd", val) != 1) {
-        fclose(f);
-        return 0;
-    }
-
-    fclose(f);
-    return 1;
+void elgamal_clear(ElGamal *eg) {
+    mpz_clears(eg->p, eg->g, NULL);
+    mpz_clears(eg->public_key.p, eg->public_key.alpha, eg->public_key.beta, NULL);
+    mpz_clear(eg->private_key.a);
 }
 
-// Генерация ключей
-void el_gamal_generate_keys(const char* pub_key_file, const char* priv_key_file, int bits, int verbose) {
-    gmp_randstate_t state;
-    gmp_randinit_default(state);
-    gmp_randseed_ui(state, time(NULL));
-
-    ElGamalKey key;
-    mpz_inits(key.p, key.g, key.x, key.y, NULL);
-
-    // Генерируем простое число p
-    generate_prime(key.p, bits, state);
-
-    // Подбираем генератор g (обычно достаточно 2)
-    mpz_set_ui(key.g, 2);
-
-    // Генерируем закрытый ключ x ∈ [1, p-2]
-    mpz_sub_ui(key.x, key.p, 2);
-    mpz_urandomm(key.x, state, key.x);
-    mpz_add_ui(key.x, key.x, 1);
-
-    // Вычисляем открытый ключ: y = g^x mod p
-    fast_power_mod(key.y, key.g, key.x, key.p);
-
-    // Сохраняем ключи
-    save_key(priv_key_file, key.p, key.g, key.x);
-    save_key(pub_key_file, key.p, key.g, key.y);
-
-    if (verbose) {
-        gmp_printf("Сгенерированы ключи ElGamal (%d бит):\n", bits);
-        gmp_printf("p = %Zd\n", key.p);
-        gmp_printf("g = %Zd\n", key.g);
-        gmp_printf("Приватный ключ x = %Zd\n", key.x);
-        gmp_printf("Публичный ключ y = %Zd\n", key.y);
-    }
-
-    mpz_clears(key.p, key.g, key.x, key.y, NULL);
-    gmp_randclear(state);
+void public_key_init(PublicKey *pk) {
+    mpz_inits(pk->p, pk->alpha, pk->beta, NULL);
 }
 
-// Шифрование сообщения
-void el_gamal_encode(char* message, size_t size, char* priv_key_file,
-                     char** enc_message, size_t* enc_message_len, int verbose) {
-    ElGamalKey key;
-    mpz_inits(key.p, key.g, key.x, key.y, NULL);
-
-    if (!load_key(key.p, key.g, key.x, priv_key_file)) {
-        if (verbose) fprintf(stderr, "Ошибка загрузки приватного ключа\n");
-        mpz_clears(key.p, key.g, key.x, key.y, NULL);
-        return;
-    }
-
-    mpz_t m, k, c1, c2;
-    mpz_inits(m, k, c1, c2, NULL);
-
-    // Конвертируем сообщение в GMP-число
-    mpz_import(m, size, 1, 1, 0, 0, message);
-
-    // Генерируем случайное k ∈ [1, p-2]
-    gmp_randstate_t state;
-    gmp_randinit_default(state);
-    gmp_randseed_ui(state, time(NULL));
-    mpz_sub_ui(k, key.p, 2);
-    mpz_urandomm(k, state, k);
-    mpz_add_ui(k, k, 1);
-
-    // Вычисляем c1 = g^k mod p
-    fast_power_mod(c1, key.g, k, key.p);
-
-    // Вычисляем c2 = m * y^k mod p
-    fast_power_mod(c2, key.y, k, key.p);
-    mpz_mul(c2, c2, m);
-    mpz_mod(c2, c2, key.p);
-
-    char c1_str[1000], c2_str[1000], enc[4096];
-    gmp_sprintf(c1_str, "%Zx",c1);
-    gmp_sprintf(c2_str, "%Zx",c2);
-    gmp_sprintf(enc, "%Zx%Zx",c1,c2);
-
-    // // Экспорт c1 и c2
-    // size_t c1_bits = mpz_sizeinbase(c1, 2);
-    // size_t c2_bits = mpz_sizeinbase(c2, 2);
-    // size_t c1_bytes = (c1_bits + 7) / 8;
-    // size_t c2_bytes = (c2_bits + 7) / 8;
-    //
-    *enc_message_len = 1 + strlen(c1_str) + strlen(c2_str);
-    *enc_message = (char*)malloc(*enc_message_len);
-
-    // Пишем длину c1 в начало
-    uint32_t len_net = strlen(c1_str);
-    memcpy(*enc_message, &len_net, 4);
-    memcpy(*enc_message+4, enc, *enc_message_len);
-    // Экспортируем c1 и c2
-    // mpz_export(*enc_message + 4, &c1_bytes, 1, 1, 0, 0, c1);
-    // mpz_export(*enc_message + 4 + c1_bytes, &c2_bytes, 1, 1, 0, 0, c2);
-
-    if (verbose) {
-        printf("ElGamal: зашифровано %zu -> %zu байт\n", size, *enc_message_len);
-    }
-
-    mpz_clears(m, k, c1, c2, key.p, key.g, key.x, key.y, NULL);
-    gmp_randclear(state);
+void public_key_clear(PublicKey *pk) {
+    mpz_clears(pk->p, pk->alpha, pk->beta, NULL);
 }
 
-// Дешифрование сообщения
-void el_gamal_decode(char* enc_message, size_t enc_size, char* pub_key_file,
-                     char** dec_message, size_t* dec_message_len, int verbose) {
-    ElGamalKey key;
-    mpz_inits(key.p, key.g, key.y, NULL);
-
-    if (!load_key(key.p, key.g, key.y, pub_key_file)) {
-        if (verbose) fprintf(stderr, "Ошибка загрузки публичного ключа\n");
-        mpz_clears(key.p, key.g, key.y, NULL);
-        return;
-    }
-
-    // Читаем длину c1
-    uint32_t c1_len_net;
-    char *c1_str, *c2_str;
-    memcpy(&c1_len_net, enc_message, 4);
-    memcpy(&c1_str, enc_message+4, c1_len_net);
-    memcpy(&c1_str, enc_message+4+c1_len_net, enc_size - c1_len_net - 4);
-
-    size_t c1_len = ntohl(c1_len_net);
-    size_t c2_len = enc_size - 4 - c1_len;
-
-    mpz_t c1, c2, s, m;
-    mpz_inits(c1, c2, s, m, NULL);
-
-    // Импортируем c1 и c2
-    // mpz_import(c1, 1, 1, 1, 0, 0, enc_message + 4);
-    // mpz_import(c2, 1, 1, 1, 0, 0, enc_message + 4 + c1_len);
-
-    // Расшифровываем: m = c2 * (c1^x)^-1 mod p
-    fast_power_mod(s, c1, key.x, key.p); // s = c1^x mod p
-    if (!mpz_invert(s, s, key.p)) {
-        fprintf(stderr, "Ошибка инверсии\n");
-        goto cleanup;
-    }
-    mpz_mul(m, c2, s);      // m = c2 * s
-    mpz_mod(m, m, key.p);   // m = m mod p
-
-    // Экспортируем результат
-    size_t m_bits = mpz_sizeinbase(m, 2);
-    *dec_message_len = (m_bits + 7) / 8;
-    *dec_message = malloc(*dec_message_len);
-    mpz_export(*dec_message, dec_message_len, 1, 1, 0, 0, m);
-
-cleanup:
-    if (verbose) {
-        printf("ElGamal: расшифровано %zu -> %zu байт\n", enc_size, *dec_message_len);
-    }
-
-    mpz_clears(c1, c2, s, m, key.p, key.g, key.y, NULL);
+void generate_system(ElGamal *eg, gmp_randstate_t state) {
+    // Generate prime p
+    generate_prime(eg->p, 512, state);
+    
+    // Generate generator g
+    mpz_t alpha, p_minus_1, temp;
+    mpz_inits(alpha, p_minus_1, temp, NULL);
+    mpz_sub_ui(p_minus_1, eg->p, 1);
+    
+    do {
+        mpz_urandomm(alpha, state, p_minus_1);
+        mpz_add_ui(alpha, alpha, 1); // alpha in [1, p-1]
+        
+        mpz_powm_ui(temp, alpha, 2, eg->p);
+    } while (mpz_cmp_ui(temp, 1) == 0 || 
+             mpz_divisible_p(p_minus_1, temp) ||
+             mpz_cmp(temp, p_minus_1) == 0);
+    
+    mpz_set(eg->g, alpha);
+    mpz_set(eg->public_key.alpha, alpha);
+    
+    // Generate private key a
+    mpz_t a;
+    mpz_init(a);
+    mpz_sub_ui(temp, eg->p, 2); // p-2
+    mpz_urandomm(a, state, temp);
+    mpz_add_ui(a, a, 1); // a in [1, p-2]
+    mpz_set(eg->private_key.a, a);
+    
+    // Compute public key beta = alpha^a mod p
+    mpz_powm(eg->public_key.beta, alpha, a, eg->p);
+    
+    mpz_set(eg->public_key.p, eg->p);
+    
+    mpz_clears(alpha, p_minus_1, temp, a, NULL);
 }
 
+void sign_message(ElGamal *eg, const char *message, char **y_str, char **delta_str, gmp_randstate_t state) {
+    // Convert message to number
+    mpz_t message_num;
+    mpz_init(message_num);
+    mpz_import(message_num, strlen(message), 1, 1, 0, 0, message);
+    
+    mpz_t r, gcd, y, u, delta, p_minus_1, temp;
+    mpz_inits(r, gcd, y, u, delta, p_minus_1, temp, NULL);
+    mpz_sub_ui(p_minus_1, eg->p, 1);
+    
+    // Find suitable r
+    do {
+        mpz_sub_ui(temp, eg->p, 2); // p-2
+        mpz_urandomm(r, state, temp);
+        mpz_add_ui(r, r, 1); // r in [1, p-2]
+        
+        mpz_t x, y;
+        mpz_inits(x, y, NULL);
+        extendedGCD(r, p_minus_1, gcd, x, y);
+        mpz_clears(x, y, NULL);
+    } while (mpz_cmp_ui(gcd, 1) != 0);
+    
+    // Compute y = g^r mod p
+    mpz_powm(y, eg->g, r, eg->p);
+    
+    // Compute u = r^-1 mod (p-1)
+    mpz_t x, y_ext;
+    mpz_inits(x, y_ext, NULL);
+    extendedGCD(r, p_minus_1, gcd, x, y_ext);
+    
+    if (mpz_cmp_ui(x, 0) < 0) {
+        mpz_add(x, x, p_minus_1);
+    }
+    mpz_set(u, x);
+    
+    // Compute delta = (message_num - a*y)*u mod (p-1)
+    mpz_mul(temp, eg->private_key.a, y);
+    mpz_sub(temp, message_num, temp);
+    mpz_mul(temp, temp, u);
+    mpz_mod(delta, temp, p_minus_1);
+    
+    if (mpz_cmp_ui(delta, 0) < 0) {
+        mpz_add(delta, delta, p_minus_1);
+    }
+    
+    // Convert y and delta to hex strings
+    *y_str = mpz_get_str(NULL, 16, y);
+    *delta_str = mpz_get_str(NULL, 16, delta);
+    
+    mpz_clears(message_num, r, gcd, y, u, delta, p_minus_1, temp, x, y_ext, NULL);
+}
 
+bool check_signature(ElGamal *eg, const char *y_str, const char *delta_str, const char *message) {
+    mpz_t y, delta, message_num;
+    mpz_inits(y, delta, message_num, NULL);
+    
+    mpz_set_str(y, y_str, 16);
+    mpz_set_str(delta, delta_str, 16);
+    mpz_import(message_num, strlen(message), 1, 1, 0, 0, message);
+    
+    mpz_t left, right, temp1, temp2;
+    mpz_inits(left, right, temp1, temp2, NULL);
+    
+    // left = (beta^y * y^delta) mod p
+    mpz_powm(temp1, eg->public_key.beta, y, eg->p);
+    mpz_powm(temp2, y, delta, eg->p);
+    mpz_mul(left, temp1, temp2);
+    mpz_mod(left, left, eg->p);
+    
+    // right = alpha^message_num mod p
+    mpz_powm(right, eg->public_key.alpha, message_num, eg->p);
+    
+    bool result = (mpz_cmp(left, right) == 0);
+    
+    mpz_clears(y, delta, message_num, left, right, temp1, temp2, NULL);
+    
+    return result;
+}
 
 #ifndef LIB
+
 int main() {
-    printf("1. Генерация ключей...\n");
-    el_gamal_generate_keys("public.key", "private.key", 256, 1);
-
-    const char message[] = "Hello ElGamal!";
-    size_t msg_len = strlen(message) + 1;
-
-    printf("\n2. Шифрование сообщения...\n");
-    char* encrypted = NULL;
-    size_t enc_len = 0;
-    el_gamal_encode((char*)message, msg_len, "private.key", &encrypted, &enc_len, 1);
-
-    printf("\n3. Дешифрование сообщения...\n");
-    char* decrypted = NULL;
-    size_t dec_len = 0;
-    el_gamal_decode(encrypted, enc_len, "public.key", &decrypted, &dec_len, 1);
-
-    printf("\nРезультат: %s\n", decrypted);
-
-    free(encrypted);
-    free(decrypted);
+    gmp_randstate_t state;
+    gmp_randinit_default(state);
+    gmp_randseed_ui(state, time(NULL));
+    
+    ElGamal eg;
+    elgamal_init(&eg);
+    generate_system(&eg, state);
+    
+    const char *message = "H";
+    
+    char *y_str = NULL;
+    char *delta_str = NULL;
+    sign_message(&eg, message, &y_str, &delta_str, state);
+    
+    bool valid = check_signature(&eg, y_str, delta_str, message);
+    printf("Signature is %s\n", valid ? "valid" : "invalid");
+    
+    free(y_str);
+    free(delta_str);
+    elgamal_clear(&eg);
+    gmp_randclear(state);
+    
     return 0;
 }
+
 #endif
