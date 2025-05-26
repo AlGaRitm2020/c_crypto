@@ -1,4 +1,5 @@
 #include "sign.h"
+#include "el_gamal.h"
 #include "sha.h"
 #include "rsa.h"
 #include "tsa_client.c"
@@ -55,6 +56,11 @@ bool cades_view_signature(const CAdESSignature *sig) {
     if (!sig) return false;
 
     printf("\n=== Информация о подписи ===\n");
+    if (sig->encode_algo == RSA)
+
+      printf("RSSSAAA A:        \n");
+    else
+      printf("ELLL:        \n");
     printf("Автор:        %s\n", sig->signer_name);
     printf("Алгоритм хеша:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
     printf("Алгоритм шифрования:     %s\n", sig->encode_algo == RSA ? "RSA" : "El-Gamal");
@@ -72,6 +78,7 @@ bool cades_view_signature(const CAdESSignature *sig) {
 bool cades_sign_file(
     const char *filename,
     const char *private_key_file,
+    const char *public_key_file,
     HashAlgorithm hash_algo,
     EncodeAlgorithm encode_algo,
     const char *signer_name,
@@ -111,6 +118,15 @@ bool cades_sign_file(
         return false;
       }
   }
+    else if(encode_algo == EL_GAMAL) {
+      el_gamal_encode((char *)hash, hash_len, (char *)public_key_file, &enc_sig, &enc_len, verbose);
+      if (!enc_sig || enc_len == 0) {
+        if (verbose) fprintf(stderr, "Ошибка el_gamal подписи\n");
+        free(hash);
+        free(file_data);
+        return false;
+      }
+  }
     else {
        fprintf(stderr, "Неподдерживаемый алгоритм шифрования\n");
        return false;
@@ -133,20 +149,24 @@ bool cades_sign_file(
     sig->signature_len = enc_len;
     memcpy(sig->timestamp, timestamp, sizeof(timestamp));
     sig->hash_algo = hash_algo;
+    
     sig->encode_algo= encode_algo;
     strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name)-1);
     sig->signer_name[sizeof(sig->signer_name)-1] = '\0';
     sig->ts_signature = ts_signature;
     sig->ts_signature_len = ts_signature_len;
-
+  
+    printf("HASH ALGO: %s\n", (char*)hash_algo);
     free(hash);
     free(file_data);
     return true;
+    
 }
 
 bool cades_verify_file(
     const char *filename,
     const char *public_key_file,
+    const char *private_key_file,
     const CAdESSignature *sig,
     int verbose
 ) {
@@ -167,7 +187,19 @@ bool cades_verify_file(
 
     char *decrypted_hash = NULL;
     size_t decrypted_len = 0;
+    // rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
+
+    // printf("ENCR ALGO: %s \n",(char*)sig->encode_algo);
+    if (sig->encode_algo == RSA) {
     rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
+  }
+    else if(sig->encode_algo == EL_GAMAL) {
+    el_gamal_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
+
+  }
+
+
+
 
     if (!decrypted_hash) {
         free(hash);
@@ -208,6 +240,7 @@ bool cades_save_signature(const char *filename, const CAdESSignature *sig) {
 
     bool success = true;
     success &= fwrite(&sig->hash_algo, sizeof(HashAlgorithm), 1, f) == 1;
+    success &= fwrite(&sig->encode_algo, sizeof(EncodeAlgorithm), 1, f) == 1;
     success &= fwrite(&sig->signature_len, sizeof(size_t), 1, f) == 1;
     success &= fwrite(sig->signature, 1, sig->signature_len, f) == sig->signature_len;
     success &= fwrite(sig->timestamp, 1, 20, f) == 20;
@@ -236,6 +269,7 @@ bool cades_load_signature(const char *filename, CAdESSignature *sig) {
     
     bool success = true;
     success &= fread(&sig->hash_algo, sizeof(HashAlgorithm), 1, f) == 1;
+    success &= fread(&sig->encode_algo, sizeof(EncodeAlgorithm), 1, f) == 1;
     success &= fread(&sig->signature_len, sizeof(size_t), 1, f) == 1;
     
     if (success) {
@@ -275,13 +309,19 @@ int main(int argc, char *argv[]) {
     }
 
     const char *filename = "env.sh";
-    const char *private_key = "hello";
-    const char *public_key = "hello.pub";
+    const EncodeAlgorithm encode_algo = EL_GAMAL;
+    // const char *private_key = "hello";
+    // const char *public_key = "hello.pub";
+    //
+    const char *private_key = "elgamal.pri";
+    const char *public_key = "elgamal.pub";
+
+
     const char *signature_file = "signatures/signature.bin";
 
     if (strcmp(argv[1], "sign") == 0) {
         CAdESSignature sig = {0};
-        if (!cades_sign_file(filename, private_key, HASH_SHA256, RSA, "Ivan Ivanov", &sig, 1)) {
+        if (!cades_sign_file(filename, private_key, HASH_SHA256, encode_algo, "Ivan Ivanov", &sig, 1)) {
             printf("Ошибка подписания!\n");
             return 1;
         }

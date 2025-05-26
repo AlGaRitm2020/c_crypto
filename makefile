@@ -1,14 +1,19 @@
-CC = gcc
-CFLAGS = -g -I./src -lgmp -O0  
+CC = gcc -g
+CFLAGS =  -I./src -lgmp -O0  
 
-sign: obj/sign.o obj/rsa.o obj/essential_func.o obj/sha.o src/tsa_client.c 
-	$(CC) -o sign obj/sign.o obj/rsa.o obj/sha.o obj/essential_func.o -lgmp
+sign: obj/sign.o obj/rsa.o obj/el_gamal.o obj/essential_func.o obj/sha.o src/tsa_client.c 
+	$(CC) -o sign obj/sign.o obj/rsa.o obj/el_gamal.o obj/sha.o obj/essential_func.o -lgmp
 
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
 	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
 
 rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 	$(CC) -o rsa obj/rsa_main.o obj/rsa.o obj/essential_func.o -lgmp
+
+
+el: obj/el_gamal_standalone.o obj/essential_func.o
+	$(CC) -o el obj/el_gamal_standalone.o  obj/essential_func.o -lgmp
+
 
 base: obj/base.o obj/base_main.o
 	$(CC) -o base_program obj/base_main.o obj/base.o
@@ -52,6 +57,19 @@ obj/rsa_main.o: src/rsa_main.c
 obj/rsa.o: src/rsa.c src/rsa.h src/essential_func.c src/essential_func.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/rsa.c -o obj/rsa.o -lgmp
+
+obj/el_gamal.o: src/el_gamal.c src/el_gamal.h src/essential_func.c src/essential_func.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -DLIB=1 -c src/el_gamal.c -o obj/el_gamal.o -lgmp
+
+
+obj/el_gamal_standalone.o: src/el_gamal.c src/el_gamal.h src/essential_func.c src/essential_func.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/el_gamal.c -o obj/el_gamal_standalone.o -lgmp
+
+
+
+
 
 obj/essential_func.o:  src/essential_func.c src/essential_func.h
 	mkdir -p obj

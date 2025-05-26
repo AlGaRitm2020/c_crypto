@@ -71,14 +71,14 @@ void elgamal_gen_key(int bits, char* pubKeyFile, char* priKeyFile, int verbose) 
     gmp_randclear(state);
 }
 
-static void pkcs7_pad(uint8_t *data, size_t data_len, uint8_t* padded_data, size_t* total_len, size_t BLOCKSIZE) {
+void pkcs7_pad(uint8_t *data, size_t data_len, uint8_t* padded_data, size_t* total_len, size_t BLOCKSIZE) {
     uint8_t pad_len = BLOCKSIZE - (data_len % BLOCKSIZE);
     *total_len = data_len + pad_len;
     memcpy(padded_data, data, data_len);
     memset(padded_data + data_len, pad_len, pad_len);
 }
 
-static int pkcs7_unpad(uint8_t* padded_data, size_t total_len, uint8_t* data, size_t* data_len) {
+int pkcs7_unpad(uint8_t* padded_data, size_t total_len, uint8_t* data, size_t* data_len) {
     if (total_len == 0) return 1;
     uint8_t pad_len = padded_data[total_len - 1];
     *data_len = total_len - pad_len;
@@ -89,7 +89,7 @@ static int pkcs7_unpad(uint8_t* padded_data, size_t total_len, uint8_t* data, si
     return 0;
 }
 
-void el_gamal_encode(char* message, size_t size, char* pubKeyFile, char** enc_message, size_t* enc_message_len, int verbose) {
+void elgamal_encode(char* message, size_t size, char* pubKeyFile, char** enc_message, size_t* enc_message_len, int verbose) {
     mpz_t p, g, y, m, c1, c2, k;
     mpz_inits(p, g, y, m, c1, c2, k, NULL);
 
@@ -124,7 +124,7 @@ void el_gamal_encode(char* message, size_t size, char* pubKeyFile, char** enc_me
     free(padded);
 }
 
-void el_gamal_decode(char* ciphertext, size_t size, char* priKeyFile, char** dec_message, size_t* dec_message_len, int verbose) {
+void elgamal_decode(char* ciphertext, size_t size, char* priKeyFile, char** dec_message, size_t* dec_message_len, int verbose) {
     mpz_t p, g, x, m, c1, c2, s, inv_s;
     mpz_inits(p, g, x, m, c1, c2, s, inv_s, NULL);
 
@@ -178,13 +178,13 @@ int main() {
     // Encrypt
     char* encrypted = NULL;
     size_t encrypted_len = 0;
-    el_gamal_encode((char*)message, strlen(message), "elgamal.pub", &encrypted, &encrypted_len, 1);
+    elgamal_encode((char*)message, strlen(message), "elgamal.pub", &encrypted, &encrypted_len, 1);
     printf("Encrypted: %s\n", encrypted);
 
     // Decrypt
     char* decrypted = NULL;
     size_t decrypted_len = 0;
-    el_gamal_decode(encrypted, encrypted_len, "elgamal.pri", &decrypted, &decrypted_len, 1);
+    elgamal_decode(encrypted, encrypted_len, "elgamal.pri", &decrypted, &decrypted_len, 1);
     printf("Decrypted: %s\n", decrypted);
 
     // Cleanup
