@@ -167,6 +167,102 @@ void el_gamal_decode(char* ciphertext, size_t size, char* priKeyFile, char** dec
     free(output);
 }
 
+
+// Добавляем в el_gamal.c
+
+void el_gamal_sign(char* message, size_t size, char* priKeyFile, char** signature, size_t* signature_len, int verbose) {
+    mpz_t p, g, x, m, r, s, k, kinv;
+    mpz_inits(p, g, x, m, r, s, k, kinv, NULL);
+
+    elgamal_load_key(p, g, x, priKeyFile, verbose);
+
+    // Хешируем сообщение (в реальной реализации нужно использовать хеш)
+    mpz_import(m, size, 1, 1, 0, 0, message);
+
+    gmp_randstate_t state;
+    gmp_randinit_default(state);
+    gmp_randseed_ui(state, time(NULL));
+
+    // Генерируем случайное k взаимно простое с p-1
+    mpz_t pm1;
+    mpz_init(pm1);
+    mpz_sub_ui(pm1, p, 1);
+    
+    do {
+        mpz_urandomm(k, state, pm1);
+        mpz_add_ui(k, k, 1); // чтобы k было в диапазоне [1, p-2]
+        mpz_gcd(kinv, k, pm1);
+    } while (mpz_cmp_ui(kinv, 1) != 0);
+
+    // Вычисляем r = g^k mod p
+    fast_power_mod(r, g, k, p);
+
+    // Вычисляем s = (m - x*r) * k^(-1) mod (p-1)
+    mpz_invert(kinv, k, pm1);
+    mpz_mul(s, x, r);
+    mpz_sub(s, m, s);
+    mpz_mul(s, s, kinv);
+    mpz_mod(s, s, pm1);
+
+    // Формируем подпись в виде строки "r:s"
+    char* result = malloc(2048);
+    gmp_sprintf(result, "%Zx:%Zx", r, s);
+    
+    *signature = result;
+    *signature_len = strlen(result);
+
+    mpz_clears(p, g, x, m, r, s, k, kinv, pm1, NULL);
+    gmp_randclear(state);
+}
+
+int el_gamal_verify(char* message, size_t size, char* pubKeyFile, char* signature, size_t signature_len, int verbose) {
+    mpz_t p, g, y, m, r, s, v1, v2;
+    mpz_inits(p, g, y, m, r, s, v1, v2, NULL);
+
+    elgamal_load_key(p, g, y, pubKeyFile, verbose);
+
+    // Хешируем сообщение (в реальной реализации нужно использовать хеш)
+    mpz_import(m, size, 1, 1, 0, 0, message);
+
+    // Парсим подпись
+    char* colon = strchr(signature, ':');
+    if (!colon) {
+        if (verbose) fprintf(stderr, "Invalid signature format\n");
+        return 0;
+    }
+    *colon = '\0';
+    mpz_set_str(r, signature, 16);
+    mpz_set_str(s, colon + 1, 16);
+    *colon = ':'; // восстанавливаем оригинальную строку
+
+    // Проверяем границы r и s
+    mpz_t pm1;
+    mpz_init(pm1);
+    mpz_sub_ui(pm1, p, 1);
+    
+    if (mpz_cmp_ui(r, 1) < 0 || mpz_cmp(r, p) >= 0 ||
+        mpz_cmp_ui(s, 1) < 0 || mpz_cmp(s, pm1) >= 0) {
+        if (verbose) fprintf(stderr, "Signature out of bounds\n");
+        return 0;
+    }
+
+    // Вычисляем v1 = y^r * r^s mod p
+    fast_power_mod(v1, y, r, p);
+    fast_power_mod(v2, r, s, p);
+    mpz_mul(v1, v1, v2);
+    mpz_mod(v1, v1, p);
+
+    // Вычисляем v2 = g^m mod p
+    fast_power_mod(v2, g, m, p);
+
+    // Подпись верна, если v1 == v2
+    int result = (mpz_cmp(v1, v2) == 0);
+
+    mpz_clears(p, g, y, m, r, s, v1, v2, pm1, NULL);
+    return result;
+}
+
+
 #ifndef LIB
 int main() {
     const char* message = "Hello, ElGamal!";

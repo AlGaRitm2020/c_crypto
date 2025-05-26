@@ -27,25 +27,25 @@ typedef struct {
     size_t ts_signature_len;
 } CAdESSignature;
 
-bool cades_sign_file(
-    const char *filename,
-    const char *private_key_file,
-    HashAlgorithm hash_algo,
-    EncodeAlgorithm encode_algo,
-    const char *signer_name,
-    CAdESSignature *sig,
-    int verbose
-);
-
-bool cades_verify_file(
-    const char *filename,
-    const char *public_key_file,
-    const CAdESSignature *sig,
-    int verbose
-);
-
+// bool cades_sign_file(
+//     const char *filename,
+//     const char *private_key_file,
+//     HashAlgorithm hash_algo,
+//     EncodeAlgorithm encode_algo,
+//     const char *signer_name,
+//     CAdESSignature *sig,
+//     int verbose
+// );
+//
+// bool cades_verify_file(
+//     const char *filename,
+//     const char *public_key_file,
+//     const CAdESSignature *sig,
+//     int verbose
+// );
+//
 bool cades_save_signature(const char *filename, const CAdESSignature *sig);
 bool cades_load_signature(const char *filename, CAdESSignature *sig);
 void cades_free_signature(CAdESSignature *sig);
-
+//
 #endif // SIGN_H

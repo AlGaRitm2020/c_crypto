@@ -56,11 +56,6 @@ bool cades_view_signature(const CAdESSignature *sig) {
     if (!sig) return false;
 
     printf("\n=== Информация о подписи ===\n");
-    if (sig->encode_algo == RSA)
-
-      printf("RSSSAAA A:        \n");
-    else
-      printf("ELLL:        \n");
     printf("Автор:        %s\n", sig->signer_name);
     printf("Алгоритм хеша:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
     printf("Алгоритм шифрования:     %s\n", sig->encode_algo == RSA ? "RSA" : "El-Gamal");
@@ -108,28 +103,29 @@ bool cades_sign_file(
     char *enc_sig = NULL;
     size_t enc_len = 0;
     
-    // Вызываем rsa_encode как void функцию
     if (encode_algo == RSA) {
-      rsa_encode((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
-      if (!enc_sig || enc_len == 0) {
-        if (verbose) fprintf(stderr, "Ошибка RSA подписи\n");
-        free(hash);
-        free(file_data);
-        return false;
-      }
-  }
+        rsa_encode((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
+        if (!enc_sig || enc_len == 0) {
+            if (verbose) fprintf(stderr, "Ошибка RSA подписи\n");
+            free(hash);
+            free(file_data);
+            return false;
+        }
+    }
     else if(encode_algo == EL_GAMAL) {
-      el_gamal_encode((char *)hash, hash_len, (char *)public_key_file, &enc_sig, &enc_len, verbose);
-      if (!enc_sig || enc_len == 0) {
-        if (verbose) fprintf(stderr, "Ошибка el_gamal подписи\n");
+        el_gamal_sign((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
+        if (!enc_sig || enc_len == 0) {
+            if (verbose) fprintf(stderr, "Ошибка ElGamal подписи\n");
+            free(hash);
+            free(file_data);
+            return false;
+        }
+    }
+    else {
+        fprintf(stderr, "Неподдерживаемый алгоритм шифрования\n");
         free(hash);
         free(file_data);
         return false;
-      }
-  }
-    else {
-       fprintf(stderr, "Неподдерживаемый алгоритм шифрования\n");
-       return false;
     }
 
     char timestamp[20];
@@ -149,18 +145,15 @@ bool cades_sign_file(
     sig->signature_len = enc_len;
     memcpy(sig->timestamp, timestamp, sizeof(timestamp));
     sig->hash_algo = hash_algo;
-    
-    sig->encode_algo= encode_algo;
+    sig->encode_algo = encode_algo;
     strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name)-1);
     sig->signer_name[sizeof(sig->signer_name)-1] = '\0';
     sig->ts_signature = ts_signature;
     sig->ts_signature_len = ts_signature_len;
-  
-    printf("HASH ALGO: %s\n", (char*)hash_algo);
+
     free(hash);
     free(file_data);
     return true;
-    
 }
 
 bool cades_verify_file(
@@ -180,34 +173,36 @@ bool cades_verify_file(
 
     size_t hash_len = (sig->hash_algo == HASH_SHA256) ? 32 : 64;
     uint8_t* hash = malloc(hash_len);
+    if (!hash) {
+        free(file_data);
+        return false;
+    }
+
     if (sig->hash_algo == HASH_SHA256)
         sha256((void**)&file_data, file_len, (void**)&hash);
     else
         sha256((void**)&file_data, file_len, (void**)&hash);
 
-    char *decrypted_hash = NULL;
-    size_t decrypted_len = 0;
-    // rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
-
-    // printf("ENCR ALGO: %s \n",(char*)sig->encode_algo);
+    bool valid = false;
+    
     if (sig->encode_algo == RSA) {
-    rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
-  }
-    else if(sig->encode_algo == EL_GAMAL) {
-    el_gamal_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
-
-  }
-
-
-
-
-    if (!decrypted_hash) {
-        free(hash);
-        free(file_data);
-        return false;
+        char *decrypted_hash = NULL;
+        size_t decrypted_len = 0;
+        rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
+        
+        if (!decrypted_hash) {
+            free(hash);
+            free(file_data);
+            return false;
+        }
+        
+        valid = memcmp(decrypted_hash, hash, hash_len) == 0;
+        free(decrypted_hash);
     }
-
-    bool valid = memcmp(decrypted_hash, hash, hash_len) == 0;
+    else if(sig->encode_algo == EL_GAMAL) {
+        valid = el_gamal_verify((char *)hash, hash_len, (char *)public_key_file, 
+                              (char *)sig->signature, sig->signature_len, verbose);
+    }
 
     if (sig->ts_signature && sig->ts_signature_len > 0) {
         bool ts_valid = verify_tsa_signature(hash, hash_len, sig->timestamp, sig->ts_signature, sig->ts_signature_len);
@@ -216,8 +211,6 @@ bool cades_verify_file(
 
     free(hash);
     free(file_data);
-    free(decrypted_hash);
-
     return valid;
 }
 
@@ -310,18 +303,13 @@ int main(int argc, char *argv[]) {
 
     const char *filename = "env.sh";
     const EncodeAlgorithm encode_algo = EL_GAMAL;
-    // const char *private_key = "hello";
-    // const char *public_key = "hello.pub";
-    //
     const char *private_key = "elgamal.pri";
     const char *public_key = "elgamal.pub";
-
-
     const char *signature_file = "signatures/signature.bin";
 
     if (strcmp(argv[1], "sign") == 0) {
         CAdESSignature sig = {0};
-        if (!cades_sign_file(filename, private_key, HASH_SHA256, encode_algo, "Ivan Ivanov", &sig, 1)) {
+        if (!cades_sign_file(filename, private_key, public_key, HASH_SHA256, encode_algo, "Ivan Ivanov", &sig, 1)) {
             printf("Ошибка подписания!\n");
             return 1;
         }
@@ -343,7 +331,7 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        bool valid = cades_verify_file(filename, public_key, &loaded_sig, 1);
+        bool valid = cades_verify_file(filename, public_key, private_key, &loaded_sig, 1);
         printf("Результат проверки: %s\n", valid ? "Подпись верна" : "Подпись неверна");
         cades_view_signature(&loaded_sig);
         cades_free_signature(&loaded_sig);
