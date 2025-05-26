@@ -13,7 +13,7 @@ typedef enum {
 typedef enum {
     RSA,
     EL_GAMAL,
-    RABBIN
+    FIAT_SHAMIR 
 } EncodeAlgorithm;
 
 typedef struct {

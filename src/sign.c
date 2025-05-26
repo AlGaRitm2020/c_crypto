@@ -1,5 +1,6 @@
 #include "sign.h"
 #include "el_gamal.h"
+#include "fiat_shamir.h"
 #include "sha.h"
 #include "rsa.h"
 #include "tsa_client.c"
@@ -58,7 +59,17 @@ bool cades_view_signature(const CAdESSignature *sig) {
     printf("\n=== Информация о подписи ===\n");
     printf("Автор:        %s\n", sig->signer_name);
     printf("Алгоритм хеша:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
-    printf("Алгоритм шифрования:     %s\n", sig->encode_algo == RSA ? "RSA" : "El-Gamal");
+    if (sig->encode_algo == RSA)
+      printf("Алгоритм шифрования: RSA \n");
+    else if (sig->encode_algo == EL_GAMAL)
+      printf("Алгоритм шифрования: EL_GAMAL\n");
+    else if (sig->encode_algo == FIAT_SHAMIR)
+      printf("Алгоритм шифрования: FIAT_SHAMIR\n");
+    else
+      printf("Алгоритм шифрования: UNKNOWN\n");
+
+  
+    // printf("Алгоритм шифрования:     %s\n", sig->encode_algo == RSA ? "RSA" : "El-Gamal");
     printf("Время:        ");
     print_formatted_time(sig->timestamp);
     printf("\n");
@@ -116,6 +127,15 @@ bool cades_sign_file(
         el_gamal_sign((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
         if (!enc_sig || enc_len == 0) {
             if (verbose) fprintf(stderr, "Ошибка ElGamal подписи\n");
+            free(hash);
+            free(file_data);
+            return false;
+        }
+    }
+   else if(encode_algo == FIAT_SHAMIR) {
+        fs_sign((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
+        if (!enc_sig || enc_len == 0) {
+            if (verbose) fprintf(stderr, "Ошибка Fiat-Shamir подписи\n");
             free(hash);
             free(file_data);
             return false;
@@ -203,6 +223,11 @@ bool cades_verify_file(
         valid = el_gamal_verify((char *)hash, hash_len, (char *)public_key_file, 
                               (char *)sig->signature, sig->signature_len, verbose);
     }
+    else if(sig->encode_algo == FIAT_SHAMIR) {
+        valid = fs_verify((char *)hash, hash_len, (char *)public_key_file,
+                         (char *)sig->signature, sig->signature_len, verbose);
+    }
+
 
     if (sig->ts_signature && sig->ts_signature_len > 0) {
         bool ts_valid = verify_tsa_signature(hash, hash_len, sig->timestamp, sig->ts_signature, sig->ts_signature_len);
@@ -302,9 +327,13 @@ int main(int argc, char *argv[]) {
     }
 
     const char *filename = "env.sh";
-    const EncodeAlgorithm encode_algo = EL_GAMAL;
-    const char *private_key = "elgamal.pri";
-    const char *public_key = "elgamal.pub";
+    const EncodeAlgorithm encode_algo = FIAT_SHAMIR;
+    // const char *private_key = "elgamal.pri";
+    // const char *public_key = "elgamal.pub";
+    // const char *private_key = "hello";
+    // const char *public_key = "hello.pub";
+    const char *private_key = "fs.pri";
+    const char *public_key = "fs.pub";
     const char *signature_file = "signatures/signature.bin";
 
     if (strcmp(argv[1], "sign") == 0) {

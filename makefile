@@ -1,8 +1,8 @@
 CC = gcc -g
 CFLAGS =  -I./src -lgmp -O0  
 
-sign: obj/sign.o obj/rsa.o obj/el_gamal.o obj/essential_func.o obj/sha.o src/tsa_client.c 
-	$(CC) -o sign obj/sign.o obj/rsa.o obj/el_gamal.o obj/sha.o obj/essential_func.o -lgmp
+sign: obj/sign.o obj/rsa.o obj/el_gamal.o obj/fiat_shamir.o obj/essential_func.o obj/sha.o src/tsa_client.c 
+	$(CC) -o sign obj/sign.o obj/rsa.o obj/el_gamal.o obj/fiat_shamir.o obj/sha.o obj/essential_func.o -lgmp
 
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
 	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
@@ -14,6 +14,8 @@ rsa: obj/rsa_main.o obj/rsa.o obj/essential_func.o
 el: obj/el_gamal_standalone.o obj/essential_func.o
 	$(CC) -o el obj/el_gamal_standalone.o  obj/essential_func.o -lgmp
 
+fs: obj/fiat_shamir_standalone.o obj/essential_func.o obj/sha.o
+	$(CC) -o fs obj/fiat_shamir_standalone.o  obj/essential_func.o obj/sha.o -lgmp
 
 base: obj/base.o obj/base_main.o
 	$(CC) -o base_program obj/base_main.o obj/base.o
@@ -62,10 +64,21 @@ obj/el_gamal.o: src/el_gamal.c src/el_gamal.h src/essential_func.c src/essential
 	mkdir -p obj
 	$(CC) $(CFLAGS) -DLIB=1 -c src/el_gamal.c -o obj/el_gamal.o -lgmp
 
+obj/fiat_shamir.o: src/fiat_shamir.c src/fiat_shamir.h src/essential_func.c src/essential_func.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -DLIB=1 -c src/fiat_shamir.c -o obj/fiat_shamir.o -lgmp
+
+
+
 
 obj/el_gamal_standalone.o: src/el_gamal.c src/el_gamal.h src/essential_func.c src/essential_func.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/el_gamal.c -o obj/el_gamal_standalone.o -lgmp
+
+obj/fiat_shamir_standalone.o: src/fiat_shamir.c src/fiat_shamir.h src/essential_func.c src/essential_func.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/fiat_shamir.c -o obj/fiat_shamir_standalone.o -lgmp
+
 
 
 
