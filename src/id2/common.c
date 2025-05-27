@@ -1,48 +1,81 @@
 // common.c
 #include "common.h"
 
-void generate_freshness(freshness_t *freshness, int use_timestamp) {
-    if (use_timestamp) {
-        freshness->type = FRESHNESS_TIMESTAMP;
-        freshness->value.timestamp = time(NULL);
-    } else {
-        freshness->type = FRESHNESS_RANDOM;
-        RAND_bytes(freshness->value.random, FRESHNESS_SIZE);
+void handle_error(const char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
+void generate_key(uint8_t key[KEY_SIZE]) {
+    if (!RAND_bytes(key, KEY_SIZE))
+        handle_error("Failed to generate key");
+    hex_dump("[KEY] Generated shared key:", key, KEY_SIZE);
+}
+
+void aes_encrypt(const uint8_t *plaintext, int plaintext_len,
+                 const uint8_t *key, uint8_t *ciphertext, int *ciphertext_len) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) handle_error("EVP_CIPHER_CTX_new failed");
+
+    hex_dump("[AES_ENC] Plaintext input", plaintext, plaintext_len);
+
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL))
+        handle_error("EncryptInit failed");
+
+    EVP_CIPHER_CTX_set_padding(ctx, 1); // PKCS7 padding
+
+    int len;
+    if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
+        handle_error("EncryptUpdate failed");
+
+    *ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len))
+        handle_error("EncryptFinal failed");
+
+    *ciphertext_len += len;
+
+    hex_dump("[AES_ENC] Ciphertext output", ciphertext, *ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+}
+
+int aes_decrypt(const uint8_t *ciphertext, int ciphertext_len,
+                const uint8_t *key, uint8_t *plaintext) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) handle_error("EVP_CIPHER_CTX_new failed");
+
+    hex_dump("[AES_DEC] Ciphertext input", ciphertext, ciphertext_len);
+
+    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL))
+        handle_error("DecryptInit failed");
+
+    EVP_CIPHER_CTX_set_padding(ctx, 1); // PKCS7 padding
+
+    int len;
+    if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
+        handle_error("DecryptUpdate failed");
+
+    int plaintext_len = len;
+
+    if (1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len))
+        handle_error("DecryptFinal failed");
+
+    plaintext_len += len;
+
+    hex_dump("[AES_DEC] Plaintext output", plaintext, plaintext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return plaintext_len;
+}
+
+void hex_dump(const char *prefix, const void *data, size_t len) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    printf("%s\n", prefix);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x ", bytes[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
     }
-}
-
-int verify_freshness(const freshness_t *freshness, int max_delay) {
-    if (freshness->type == FRESHNESS_TIMESTAMP) {
-        time_t current_time = time(NULL);
-        return difftime(current_time, freshness->value.timestamp) <= max_delay;
-    } else if (freshness->type == FRESHNESS_RANDOM) {
-        // In a real implementation, we'd check against used random values
-        return 1; // Accept all random values for this example
-    }
-    return 0;
-}
-
-void encrypt_message(const protocol_message *msg, unsigned char *iv, unsigned char *ciphertext) {
-    AES_KEY aes_key_enc;
-    unsigned char plaintext[sizeof(protocol_message)];
-    memcpy(plaintext, msg, sizeof(protocol_message));
-
-    // Generate random IV
-    RAND_bytes(iv, AES_BLOCK_SIZE);
-
-    // Encrypt the message
-    AES_set_encrypt_key(aes_key, 128, &aes_key_enc);
-    AES_cbc_encrypt(plaintext, ciphertext, sizeof(protocol_message), &aes_key_enc, iv, AES_ENCRYPT);
-}
-
-int decrypt_message(protocol_message *msg, const unsigned char *iv, const unsigned char *ciphertext) {
-    AES_KEY aes_key_dec;
-    unsigned char plaintext[sizeof(protocol_message)];
-
-    // Decrypt the message
-    AES_set_decrypt_key(aes_key, 128, &aes_key_dec);
-    AES_cbc_encrypt(ciphertext, plaintext, sizeof(protocol_message), &aes_key_dec, (unsigned char *)iv, AES_DECRYPT);
-
-    memcpy(msg, plaintext, sizeof(protocol_message));
-    return 1;
+    printf("\n");
 }
