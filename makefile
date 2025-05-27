@@ -1,8 +1,13 @@
 CC = gcc -g
 CFLAGS =  -I./src -lgmp -O0  
 
-sign: obj/sign.o obj/rsa.o obj/el_gamal.o obj/fiat_shamir.o obj/essential_func.o obj/sha.o src/tsa_client.c 
+sign: obj/sign.o obj/rsa.o obj/el_gamal.o obj/fiat_shamir.o obj/essential_func.o obj/sha.o src/tsa_client.c obj/tsa_server.o
 	$(CC) -o sign obj/sign.o obj/rsa.o obj/el_gamal.o obj/fiat_shamir.o obj/sha.o obj/essential_func.o -lgmp
+	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
+
+id2: obj/client_a.o obj/client_b.o obj/common.o
+	$(CC) -o id2_a obj/client_a.o obj/common.o -lssl -lcrypto 
+	$(CC) -o id2_b obj/client_b.o obj/common.o -lssl -lcrypto
 
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
 	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
@@ -26,6 +31,16 @@ hmac: obj/sha.o obj/hmac.o
 obj/sign.o: src/sign.c src/sign.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/sign.c  -o obj/sign.o
+
+obj/client_a.o: src/id2/client_a.c 	
+	$(CC) -c src/id2/client_a.c -o obj/client_a.o 
+
+obj/client_b.o: src/id2/client_b.c 	
+	$(CC) -c src/id2/client_b.c -o obj/client_b.o 
+
+obj/common.o: src/id2/common.c src/id2/common.h
+	$(CC) -c src/id2/common.c -o obj/common.o 
+
 
 obj/hmac.o: src/hmac.c 
 	$(CC) $(CFLAGS) -c src/hmac.c -o obj/hmac.o
