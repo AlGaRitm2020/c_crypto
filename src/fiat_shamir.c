@@ -122,13 +122,13 @@ void fs_sign(char* message, size_t size, char* priKeyFile, char** signature, siz
     free(hash);
 
     // Вычисляем y = r * s^e mod n
-    mpz_powm(y, s, e, n);
+    fast_power_mod(y, s, e, n);
     mpz_mul(y, y, r);
     mpz_mod(y, y, n);
 
-    // Формируем подпись в виде "x:y:e"
-    char* result = malloc(2048);
-    gmp_sprintf(result, "%Zx:%Zx:%Zx", x, y, e);
+    // Формируем подпись в виде "y:e"
+    char* result = malloc(2048 * 2 + 1);
+    gmp_sprintf(result, "%Zx:%Zx", y, e);
     
     *signature = result;
     *signature_len = strlen(result);
@@ -138,8 +138,8 @@ void fs_sign(char* message, size_t size, char* priKeyFile, char** signature, siz
 }
 
 int fs_verify(char* message, size_t size, char* pubKeyFile, char* signature, size_t signature_len, int verbose) {
-    mpz_t n, v, x, y, e, x_verify, left, right;
-    mpz_inits(n, v, x, y, e, x_verify, left, right, NULL);
+    mpz_t n, v, y, e, x_verify, left, right, v_inv_e;
+    mpz_inits(n, v, y, e, x_verify, left, right, v_inv_e, NULL);
 
     // Загружаем публичный ключ
     fs_load_key(n, v, pubKeyFile, verbose);
@@ -147,13 +147,6 @@ int fs_verify(char* message, size_t size, char* pubKeyFile, char* signature, siz
     // Парсим подпись
     char* copy = strdup(signature);
     char* token = strtok(copy, ":");
-    if (!token) {
-        free(copy);
-        return 0;
-    }
-    mpz_set_str(x, token, 16);
-    
-    token = strtok(NULL, ":");
     if (!token) {
         free(copy);
         return 0;
@@ -168,29 +161,33 @@ int fs_verify(char* message, size_t size, char* pubKeyFile, char* signature, siz
     mpz_set_str(e, token, 16);
     free(copy);
 
-    // Проверяем, что x, y, e в допустимых пределах
-    if (mpz_cmp_ui(x, 0) <= 0 || mpz_cmp(x, n) >= 0 ||
-        mpz_cmp_ui(y, 0) <= 0 || mpz_cmp(y, n) >= 0 ||
+    // Проверяем, что y, e в допустимых пределах
+    if (mpz_cmp_ui(y, 0) <= 0 || mpz_cmp(y, n) >= 0 ||
         mpz_cmp_ui(e, 0) < 0) {
         return 0;
     }
 
-    // Вычисляем x_verify = y^2 * v^e mod n
-    mpz_powm_ui(left, y, 2, n); // left = y^2 mod n
-    mpz_powm(right, v, e, n);   // right = v^e mod n
-    mpz_div(x_verify, left, right);
-    mpz_mod(x_verify, x_verify, n); // x' = (y^2 * v^e ) (mod n)
-                                    // x = r^2 mod n
-    // Вычисляем ожидаемое e = hash(message || x)
-    char* x_str = mpz_get_str(NULL, 16, x);
+    // Вычисляем v_inv_e = v^{-e} mod n
+    mpz_t neg_e;
+    mpz_init(neg_e);
+    mpz_neg(neg_e, e);
+    mpz_powm(v_inv_e, v, neg_e, n);  // v^{-e} mod n
+    mpz_clear(neg_e);
+
+    // Вычисляем x_verify = y^2 * v^{-e} mod n
+    mpz_powm_ui(left, y, 2, n);      // left = y^2 mod n
+    mpz_mul(x_verify, left, v_inv_e);
+    mpz_mod(x_verify, x_verify, n);  // x' = (y^2 * v^{-e}) mod n
+
+    // Вычисляем ожидаемое e = hash(message || x_verify)
+    char* x_str = mpz_get_str(NULL, 16, x_verify);
     size_t x_len = strlen(x_str);
     size_t total_len = size + x_len;
     char* combined = malloc(total_len);
     memcpy(combined, message, size);
     memcpy(combined + size, x_str, x_len);
     
-    // uint8_t hash[32];
-    uint8_t *hash = (uint8_t* )malloc(32*1);
+    uint8_t *hash = (uint8_t*)malloc(32 * 1);
     sha256((void**)&combined, total_len, (void**)&hash);
     free(combined);
     free(x_str);
@@ -198,11 +195,12 @@ int fs_verify(char* message, size_t size, char* pubKeyFile, char* signature, siz
     mpz_t e_expected;
     mpz_init(e_expected);
     mpz_import(e_expected, 32, 1, 1, 0, 0, hash);
+    free(hash);
 
-    // Подпись верна, если x == x_verify и e == e_expected
+    // Подпись верна, если e == e_expected
     int result = (mpz_cmp(e, e_expected) == 0);
 
-    mpz_clears(n, v, x, y, e, x_verify, left, right, e_expected, NULL);
+    mpz_clears(n, v, y, e, x_verify, left, right, v_inv_e, e_expected, NULL);
     return result;
 }
 
