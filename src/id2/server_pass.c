@@ -1,6 +1,12 @@
 #include "common.h"
-#include <openssl/sha.h>
+#include "../sha.h"
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include "common.h"
 
 #define ID "Client_A"
 #define INITIAL_ITER 2 
@@ -15,6 +21,20 @@ void print_hash(const uint8_t *data, size_t len) {
     printf("\n");
 }
 
+// Функция исправления endianness
+void fix_endian(uint8_t *hash, size_t len) {
+    for (size_t i = 0; i < len; i += 4) {
+        uint32_t *word = (uint32_t *)(hash + i);
+        uint32_t temp = *word;
+
+        *word =
+            ((temp >> 24) & 0x000000FF) |
+            ((temp >> 8)  & 0x0000FF00) |
+            ((temp << 8)  & 0x00FF0000) |
+            ((temp << 24) & 0xFF000000);
+    }
+}
+
 int main() {
     int server_fd, new_socket;
     struct sockaddr_in address;
@@ -24,25 +44,38 @@ int main() {
 
     // Инициализация: h^n(password)
     char* secret = strdup(SECRET_PASSWORD);
+    printf("secret: %s\n", secret);
+
+    // Выделяем память под первый хэш
     uint8_t *hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
 
-    // Вычисляем h^1
-    SHA256((const uint8_t*)secret, strlen(secret), hash);
+    // Копируем secret в динамически выделенную память
+    char *data_copy = (char*)malloc(strlen(secret) + 1);
+    strcpy(data_copy, secret);
+
+    sha256((void**)&data_copy, strlen(secret), (void**)&hash);
+    fix_endian(hash, SHA256_DIGEST_LENGTH); // ← фиксируем endianness
     printf("h^1: ");
     print_hash(hash, SHA256_DIGEST_LENGTH);
 
-    // Вычисляем h^2 ... h^n
-    for(int i = 1; i < INITIAL_ITER; i++) {
-        printf("Input to SHA256 (len %d): ", SHA256_DIGEST_LENGTH);
-        print_hash(hash, SHA256_DIGEST_LENGTH);
+    free(data_copy);
 
+    for(int i = 1; i < INITIAL_ITER; i++) {
         uint8_t *new_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        SHA256(hash, SHA256_DIGEST_LENGTH, new_hash);
-        free(hash);
-        hash = new_hash;
+
+        uint8_t *current_hash_copy = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(current_hash_copy, hash, SHA256_DIGEST_LENGTH);
+        fix_endian(current_hash_copy, SHA256_DIGEST_LENGTH); // ← фиксируем перед хэшированием
+
+        sha256((void**)&current_hash_copy, SHA256_DIGEST_LENGTH, (void**)&new_hash);
+        fix_endian(new_hash, SHA256_DIGEST_LENGTH); // ← фиксируем после хэширования
 
         printf("h^%d: ", i + 1);
-        print_hash(hash, SHA256_DIGEST_LENGTH);
+        print_hash(new_hash, SHA256_DIGEST_LENGTH);
+
+        free(hash);
+        free(current_hash_copy);
+        hash = new_hash;
     }
 
     stored_hash = hash;
@@ -106,6 +139,7 @@ int main() {
 
         // Получаем хэш
         uint8_t *received_hash = (uint8_t*)(iter_end + 1);
+        fix_endian(received_hash, SHA256_DIGEST_LENGTH); // ← фиксируем endianness
 
         printf("Получено от клиента:\nID: %s\nИтерация: %d\nХэш:\n", received_id, received_iter);
         print_hash(received_hash, SHA256_DIGEST_LENGTH);
@@ -126,13 +160,20 @@ int main() {
 
         // Вычисляем sha256 от полученного хэша
         uint8_t *computed_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        SHA256(received_hash, SHA256_DIGEST_LENGTH, computed_hash);
+
+        uint8_t *hash_copy = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(hash_copy, received_hash, SHA256_DIGEST_LENGTH);
+
+        sha256((void**)&hash_copy, SHA256_DIGEST_LENGTH, (void**)&computed_hash);
+        fix_endian(computed_hash, SHA256_DIGEST_LENGTH); // ← фиксируем endianness
 
         printf("Вычисленный хэш от полученного значения:\n");
         print_hash(computed_hash, SHA256_DIGEST_LENGTH);
 
         printf("Сохранённый сервером хэш (ожидался):\n");
         print_hash(stored_hash, SHA256_DIGEST_LENGTH);
+
+        free(hash_copy);
 
         if (memcmp(computed_hash, stored_hash, SHA256_DIGEST_LENGTH) != 0) {
             send(new_socket, "Authentication failed", 21, 0);

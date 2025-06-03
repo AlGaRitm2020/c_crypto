@@ -1,6 +1,10 @@
-#include "common.h"
-#include <openssl/sha.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include "common.h"
 
 #define ID "Client_A"
 #define SHA256_DIGEST_LENGTH 32
@@ -13,10 +17,28 @@ void print_hash(const uint8_t *data, size_t len) {
     printf("\n");
 }
 
+// Функция для исправления endianness (каждые 4 байта)
+void fix_endian(uint8_t *hash, size_t len) {
+    for (size_t i = 0; i < len; i += 4) {
+        uint32_t *word = (uint32_t *)(hash + i);
+        uint32_t temp = *word;
+
+        // Переворачиваем байты внутри слова
+        *word =
+            ((temp >> 24) & 0x000000FF) |
+            ((temp >> 8)  & 0x0000FF00) |
+            ((temp << 8)  & 0x00FF0000) |
+            ((temp << 24) & 0xFF000000);
+    }
+}
+
+extern void sha256(void **data, uint64_t len, void **out_hash);
+extern void handle_error(const char *);
+
 int main() {
     int sock = 0;
     struct sockaddr_in serv_addr;
-    char password[256];
+    char* password = (char*)malloc(256);
     int iteration;
 
     printf("Введите секретный пароль: ");
@@ -26,12 +48,26 @@ int main() {
 
     // Вычисляем h^iteration(password)
     uint8_t *current_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-    SHA256((const uint8_t*)password, strlen(password), current_hash);
+    sha256((void**)&password, strlen(password), (void**)&current_hash);
+    fix_endian(current_hash, SHA256_DIGEST_LENGTH); // ← фиксируем порядок байт
+    printf("h^1: ");
+    print_hash(current_hash, SHA256_DIGEST_LENGTH);
 
     for(int i = 1; i < iteration; i++) {
         uint8_t *new_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        SHA256(current_hash, SHA256_DIGEST_LENGTH, new_hash);
+
+        uint8_t *current_hash_copy = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(current_hash_copy, current_hash, SHA256_DIGEST_LENGTH);
+        fix_endian(current_hash_copy, SHA256_DIGEST_LENGTH); // ← фиксируем перед следующим хэшированием
+
+        sha256((void**)&current_hash_copy, SHA256_DIGEST_LENGTH, (void**)&new_hash);
+        fix_endian(new_hash, SHA256_DIGEST_LENGTH); // ← фиксируем результат хэширования
+
+        printf("h^%d: ", i + 1);
+        print_hash(new_hash, SHA256_DIGEST_LENGTH);
+
         free(current_hash);
+        free(current_hash_copy);
         current_hash = new_hash;
     }
 
