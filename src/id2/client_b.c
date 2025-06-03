@@ -25,39 +25,64 @@ int main() {
     printf("[CLIENT_B] Сервер запущен, ожидание подключения...\n");
     new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
 
-    // Читаем зашифрованное сообщение
-    uint8_t encrypted[1024];
-    ssize_t received = read(new_socket, encrypted, 1024);
-    if (received <= 0) handle_error("read() failed");
+    // Шаг 1: Получаем M2 (открыто) | зашифрованные данные
+    char m2[256];
+    uint8_t encrypted_part[1024];
+    
+    // Чтение M2 до разделителя
+    int bytes_received = 0;
+    char c;
+    while (recv(new_socket, &c, 1, 0) > 0) {
+        if (c == '|') break;
+        m2[bytes_received++] = c;
+    }
+    m2[bytes_received] = '\0';
 
-    // Расшифровываем
+    // Чтение зашифрованной части
+    int enc_size = recv(new_socket, encrypted_part, 1024, 0);
+    if (enc_size <= 0) handle_error("Failed to receive encrypted part");
+
+    // Расшифровка
     uint8_t decrypted[1024];
-    int decrypted_len = aes_decrypt(encrypted, received, key, decrypted);
+    int decrypted_len = aes_decrypt(encrypted_part, enc_size, key, decrypted);
     decrypted[decrypted_len] = '\0';
 
-    printf("[CLIENT_B] Получено сообщение: %s\n", decrypted);
+    // Определяем тип аутентификатора (8 байт - time_t, 16 - random)
+    int auth_len = (decrypted[0] & 0x80) ? sizeof(time_t) : 16; // Эвристическое определение
+    
+    // Парсинг: auth_data, A, M1
+    uint8_t auth_data[24];
+    char ida[32], m1[256];
+    
+    memcpy(auth_data, decrypted, auth_len);
+    strcpy(ida, (char*)(decrypted + auth_len));
+    strcpy(m1, (char*)(decrypted + auth_len + strlen(ida) + 1));
 
-    // Парсим: IDA || R_A || M1
-    char ida[32], ra[32], m1[256];
-    // sscanf(decrypted, "%31[^ ]%31[^ ]%255s", ida, ra, m1);
-    // sscanf(decrypted, "%s|%s|%s", ida, ra, m1);
-    sscanf(decrypted, "%255[^|]|%255[^|]|%255[^|]", ida, ra, m1);
-    printf("[CLIENT_B] IDA: %s | R_A: %s | M1: %s\n", ida, ra, m1);
+    printf("[CLIENT_B] Получено M2=%s, IDA=%s, M1=%s\n", m2, ida, m1);
 
-    // Генерируем ответ: IDB || M2(R_A) || M3
-    char m2[256], m3[256];
-    strcat(m2, ra); // M2 зависит от R_A
-    strcpy(m3, "Auth_OK"); // M3 — фиксированное значение
+    // Шаг 2: Подготовка ответа
+    char m3[256], m4[256];
+    printf("Введите сообщение M3: ");
+    scanf(" %[^\n]%*c", m3);
+    printf("Введите сообщение M4: ");
+    scanf(" %[^\n]%*c", m4);
 
-    char response_msg[1024];
-    snprintf(response_msg, sizeof(response_msg), "%s|%s|%s", ID_B, m2, m3);
-    int msg_len = strlen(response_msg);
+    // Формируем зашифрованную часть: auth_data (то же что получили), B, M3
+    uint8_t to_encrypt[1024];
+    memcpy(to_encrypt, auth_data, auth_len);
+    strcpy((char*)(to_encrypt + auth_len), ID_B);
+    strcpy((char*)(to_encrypt + auth_len + strlen(ID_B) + 1), m3);
+    int to_encrypt_len = auth_len + strlen(ID_B) + 1 + strlen(m3) + 1;
 
-    // Шифруем и отправляем
-    uint8_t response_enc[1024];
-    int response_enc_len;
-    aes_encrypt((uint8_t*)response_msg, msg_len, key, response_enc, &response_enc_len);
-    send(new_socket, response_enc, response_enc_len, 0);
+    uint8_t encrypted[1024];
+    int ciphertext_len;
+    aes_encrypt(to_encrypt, to_encrypt_len, key, encrypted, &ciphertext_len);
+
+    // Отправка: M4 (открыто) | зашифрованные данные
+    send(new_socket, m4, strlen(m4) + 1, 0);
+    send(new_socket, "|", 1, 0);
+    send(new_socket, encrypted, ciphertext_len, 0);
+    printf("[CLIENT_B] Отправлен шаг 2: M4=%s | encrypted data\n", m4);
 
     close(new_socket);
     close(server_fd);
