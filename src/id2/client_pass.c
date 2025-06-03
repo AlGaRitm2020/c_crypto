@@ -1,8 +1,6 @@
 #include "common.h"
-#include "../sha.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <openssl/sha.h>
+#include <stdint.h>
 
 #define ID "Client_A"
 #define SHA256_DIGEST_LENGTH 32
@@ -18,8 +16,7 @@ void print_hash(const uint8_t *data, size_t len) {
 int main() {
     int sock = 0;
     struct sockaddr_in serv_addr;
-    // char password[256];
-    char* password = (char*)malloc(256);
+    char password[256];
     int iteration;
 
     printf("Введите секретный пароль: ");
@@ -29,11 +26,11 @@ int main() {
 
     // Вычисляем h^iteration(password)
     uint8_t *current_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-    sha256((void**)&password, strlen(password), (void**)&current_hash);
+    SHA256((const uint8_t*)password, strlen(password), current_hash);
 
     for(int i = 1; i < iteration; i++) {
         uint8_t *new_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        sha256((void**)&current_hash, SHA256_DIGEST_LENGTH, (void**)&new_hash);
+        SHA256(current_hash, SHA256_DIGEST_LENGTH, new_hash);
         free(current_hash);
         current_hash = new_hash;
     }

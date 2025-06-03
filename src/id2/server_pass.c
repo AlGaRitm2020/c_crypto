@@ -1,8 +1,6 @@
 #include "common.h"
-#include "../sha.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <openssl/sha.h>
+#include <stdint.h>
 
 #define ID "Client_A"
 #define INITIAL_ITER 2 
@@ -28,13 +26,25 @@ int main() {
     char* secret = strdup(SECRET_PASSWORD);
     uint8_t *hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
 
-    sha256((void**)&secret, strlen(secret), (void**)&hash);
+    // Вычисляем h^1
+    SHA256((const uint8_t*)secret, strlen(secret), hash);
+    printf("h^1: ");
+    print_hash(hash, SHA256_DIGEST_LENGTH);
+
+    // Вычисляем h^2 ... h^n
     for(int i = 1; i < INITIAL_ITER; i++) {
+        printf("Input to SHA256 (len %d): ", SHA256_DIGEST_LENGTH);
+        print_hash(hash, SHA256_DIGEST_LENGTH);
+
         uint8_t *new_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        sha256((void**)&hash, SHA256_DIGEST_LENGTH, (void**)&new_hash);
+        SHA256(hash, SHA256_DIGEST_LENGTH, new_hash);
         free(hash);
         hash = new_hash;
+
+        printf("h^%d: ", i + 1);
+        print_hash(hash, SHA256_DIGEST_LENGTH);
     }
+
     stored_hash = hash;
 
     printf("Серверный начальный хэш (h^%d):\n", INITIAL_ITER);
@@ -114,15 +124,19 @@ int main() {
             continue;
         }
 
-        // Вычисляем ожидаемый хэш
-        uint8_t *expected_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
-        sha256((void**)&stored_hash, SHA256_DIGEST_LENGTH, (void**)&expected_hash);
+        // Вычисляем sha256 от полученного хэша
+        uint8_t *computed_hash = (uint8_t*)malloc(SHA256_DIGEST_LENGTH);
+        SHA256(received_hash, SHA256_DIGEST_LENGTH, computed_hash);
 
-        if (memcmp(received_hash, expected_hash, SHA256_DIGEST_LENGTH) != 0) {
-            printf("Ошибка аутентификации. Ожидался хэш:\n");
-            print_hash(expected_hash, SHA256_DIGEST_LENGTH);
+        printf("Вычисленный хэш от полученного значения:\n");
+        print_hash(computed_hash, SHA256_DIGEST_LENGTH);
+
+        printf("Сохранённый сервером хэш (ожидался):\n");
+        print_hash(stored_hash, SHA256_DIGEST_LENGTH);
+
+        if (memcmp(computed_hash, stored_hash, SHA256_DIGEST_LENGTH) != 0) {
             send(new_socket, "Authentication failed", 21, 0);
-            free(expected_hash);
+            free(computed_hash);
             close(new_socket);
             continue;
         }
@@ -136,7 +150,7 @@ int main() {
         send(new_socket, "Authentication successful", 25, 0);
         printf("Успешная аутентификация, следующая итерация: %d\n", current_iter);
 
-        free(expected_hash);
+        free(computed_hash);
         close(new_socket);
     }
 
