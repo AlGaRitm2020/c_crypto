@@ -25,11 +25,9 @@ int main() {
     printf("[CLIENT_B] Сервер запущен, ожидание подключения...\n");
     new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
 
-    // Шаг 1: Получаем M2 (открыто) | зашифрованные данные
     char m2[256];
     uint8_t encrypted_part[1024];
     
-    // Чтение M2 до разделителя
     int bytes_received = 0;
     char c;
     while (recv(new_socket, &c, 1, 0) > 0) {
@@ -38,16 +36,13 @@ int main() {
     }
     m2[bytes_received] = '\0';
 
-    // Чтение зашифрованной части
     int enc_size = recv(new_socket, encrypted_part, 1024, 0);
     if (enc_size <= 0) handle_error("Failed to receive encrypted part");
 
-    // Расшифровка
     uint8_t decrypted[1024];
     int decrypted_len = aes_decrypt(encrypted_part, enc_size, key, decrypted);
     decrypted[decrypted_len] = '\0';
 
-    // Определяем тип аутентификатора (8 байт - time_t, 16 - random)
     int auth_len = (decrypted[0] & 0x80) ? sizeof(time_t) : 16; // Эвристическое определение
     
     // Парсинг: auth_data, A, M1

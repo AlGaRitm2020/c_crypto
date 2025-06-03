@@ -6,6 +6,16 @@ void handle_error(const char *msg) {
     exit(EXIT_FAILURE);
 }
 
+void print_hex_arr(uint8_t* arr, size_t size, char* msg) {
+  printf("%s: ", msg);
+  for (size_t i = 0; i < size; i++) {
+    printf("%x ", arr[i]);
+    if ((i%17 == 0) && (i!=0) )
+
+    printf("\n");
+  }
+}
+
 void generate_key(uint8_t key[KEY_SIZE]) {
     if (!RAND_bytes(key, KEY_SIZE))
         handle_error("Failed to generate key");

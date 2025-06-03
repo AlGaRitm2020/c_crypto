@@ -14,6 +14,7 @@
 #define KEY_SIZE 16
 #define MAX_BUF 1024
 
+void print_hex_arr(uint8_t* arr, size_t size, char* msg); 
 void handle_error(const char *msg);
 void generate_key(uint8_t key[KEY_SIZE]);
 void aes_encrypt(const uint8_t *plaintext, int plaintext_len,

@@ -11,7 +11,7 @@ int main() {
     uint8_t encrypted[1024], decrypted[1024];
     int ciphertext_len;
 
-    // Выбор типа аутентификатора
+    // Выбор временной метки или случ. числа 
     char choice;
     printf("Использовать временную метку (t) или случайное число (r)? ");
     scanf(" %c", &choice);
@@ -24,7 +24,7 @@ int main() {
     scanf(" %[^\n]%*c", m2);
 
     // Подготовка аутентификатора (t_A или r_A)
-    uint8_t auth_data[24] = {0}; // 8(time_t) + 16(random)
+    uint8_t auth_data[16] = {0}; 
     int auth_len = 0;
 
     if (choice == 't') {

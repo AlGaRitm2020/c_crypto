@@ -13,6 +13,11 @@ id3: obj/client_a3.o obj/client_b3.o obj/common.o
 	$(CC) -o id3_a obj/client_a3.o obj/common.o -lssl -lcrypto 
 	$(CC) -o id3_b obj/client_b3.o obj/common.o -lssl -lcrypto
 
+id_asm: obj/client_a_asm.o obj/client_b_asm.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o
+	$(CC) -o id_asm_a obj/client_a_asm.o obj/common.o obj/rsa.o  obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o id_asm_b obj/client_b_asm.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+
+
 
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
 	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
@@ -50,6 +55,11 @@ obj/client_b3.o: src/id2/client_b3.c
 	$(CC) -c src/id2/client_b3.c -o obj/client_b3.o 
 
 
+obj/client_a_asm.o: src/id2/client_a_asm.c 	
+	$(CC) -c src/id2/client_a_asm.c -o obj/client_a_asm.o 
+
+obj/client_b_asm.o: src/id2/client_b_asm.c 	
+	$(CC) -c src/id2/client_b_asm.c -o obj/client_b_asm.o 
 
 obj/common.o: src/id2/common.c src/id2/common.h
 	$(CC) -c src/id2/common.c -o obj/common.o 
@@ -68,7 +78,7 @@ obj/tsa_client.o: src/tsa_client.c
 
 
 obj/sha.o: src/sha.c src/sha.h 
-	$(CC) $(CFLAGS) -DSHA_LIB=1 -c src/sha.c -o obj/sha.o
+	$(CC) $(CFLAGS) -DLIB=1 -c src/sha.c -o obj/sha.o
 
 sha: src/sha.c
 	$(CC) -o sha src/sha.c  
