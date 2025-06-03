@@ -9,6 +9,11 @@ id2: obj/client_a.o obj/client_b.o obj/common.o
 	$(CC) -o id2_a obj/client_a.o obj/common.o -lssl -lcrypto 
 	$(CC) -o id2_b obj/client_b.o obj/common.o -lssl -lcrypto
 
+id3: obj/client_a3.o obj/client_b3.o obj/common.o
+	$(CC) -o id3_a obj/client_a3.o obj/common.o -lssl -lcrypto 
+	$(CC) -o id3_b obj/client_b3.o obj/common.o -lssl -lcrypto
+
+
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
 	$(CC) -o tsa_server obj/tsa_server.o obj/rsa.o  obj/essential_func.o -lgmp
 
@@ -37,6 +42,14 @@ obj/client_a.o: src/id2/client_a.c
 
 obj/client_b.o: src/id2/client_b.c 	
 	$(CC) -c src/id2/client_b.c -o obj/client_b.o 
+
+obj/client_a3.o: src/id2/client_a3.c 	
+	$(CC) -c src/id2/client_a3.c -o obj/client_a3.o 
+
+obj/client_b3.o: src/id2/client_b3.c 	
+	$(CC) -c src/id2/client_b3.c -o obj/client_b3.o 
+
+
 
 obj/common.o: src/id2/common.c src/id2/common.h
 	$(CC) -c src/id2/common.c -o obj/common.o 
