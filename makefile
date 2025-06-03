@@ -17,6 +17,13 @@ id_asm: obj/client_a_asm.o obj/client_b_asm.o obj/common.o obj/rsa.o obj/sha.o o
 	$(CC) -o id_asm_a obj/client_a_asm.o obj/common.o obj/rsa.o  obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
 	$(CC) -o id_asm_b obj/client_b_asm.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
 
+pass: obj/client_pass.o obj/server_pass.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o
+	$(CC) -o client_pass obj/client_pass.o obj/common.o obj/rsa.o  obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o server_pass obj/server_pass.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+
+
+
+
 
 
 tsa_server: obj/tsa_server.o obj/rsa.o obj/essential_func.o 
@@ -60,6 +67,13 @@ obj/client_a_asm.o: src/id2/client_a_asm.c
 
 obj/client_b_asm.o: src/id2/client_b_asm.c 	
 	$(CC) -c src/id2/client_b_asm.c -o obj/client_b_asm.o 
+
+obj/client_pass.o: src/id2/client_pass.c 	
+	$(CC) -c src/id2/client_pass.c -o obj/client_pass.o 
+
+obj/server_pass.o: src/id2/server_pass.c 	
+	$(CC) -c src/id2/server_pass.c -o obj/server_pass.o 
+
 
 obj/common.o: src/id2/common.c src/id2/common.h
 	$(CC) -c src/id2/common.c -o obj/common.o 
