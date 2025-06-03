@@ -39,17 +39,18 @@ int main() {
 
     // Парсим: IDA || R_A || M1
     char ida[32], ra[32], m1[256];
-    sscanf(decrypted, "%31[^ ]%31[^ ]%255s", ida, ra, m1);
+    // sscanf(decrypted, "%31[^ ]%31[^ ]%255s", ida, ra, m1);
+    // sscanf(decrypted, "%s|%s|%s", ida, ra, m1);
+    sscanf(decrypted, "%255[^|]|%255[^|]|%255[^|]", ida, ra, m1);
     printf("[CLIENT_B] IDA: %s | R_A: %s | M1: %s\n", ida, ra, m1);
 
     // Генерируем ответ: IDB || M2(R_A) || M3
     char m2[256], m3[256];
-    strcpy(m2, "Response_to_");
     strcat(m2, ra); // M2 зависит от R_A
     strcpy(m3, "Auth_OK"); // M3 — фиксированное значение
 
     char response_msg[1024];
-    snprintf(response_msg, sizeof(response_msg), "%s%s%s", ID_B, m2, m3);
+    snprintf(response_msg, sizeof(response_msg), "%s|%s|%s", ID_B, m2, m3);
     int msg_len = strlen(response_msg);
 
     // Шифруем и отправляем

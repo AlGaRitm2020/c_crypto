@@ -37,7 +37,7 @@ int main() {
 
     // Формируем сообщение: IDA || R_A || M1
     char msg[1024];
-    snprintf(msg, sizeof(msg), "%s%s%s", ID_A, r_a, m1);
+    snprintf(msg, sizeof(msg), "%s|%s|%s", ID_A, r_a, m1);
     int msg_len = strlen(msg);
 
     // Шифруем
@@ -72,6 +72,9 @@ int main() {
     decrypted[decrypted_len] = '\0';
     printf("[CLIENT_A] Расшифрованное сообщение: %s\n", decrypted);
 
+    char ida[32], ra[32];
+    sscanf(decrypted, "%255[^|]|%255[^|]|%255[^|]", ida, ra, m1);
+    printf("[CLIENT_A] IDA: %s | R_A: %s | M1: %s\n", ida, ra, m1);
     close(sock);
     return 0;
 }
