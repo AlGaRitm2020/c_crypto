@@ -59,7 +59,7 @@ int create_server_socket(int port) {
     return server_fd;
 }
 
-int connect_to_server(const char *ip, int port) {
+int connect_to(const char *ip, int port) {
     int sock = 0;
     struct sockaddr_in serv_addr;
 

@@ -35,7 +35,7 @@ typedef struct {
 } connection_t;
 
 int create_server_socket(int port);
-int connect_to_server(const char *ip, int port);
+int connect_to(const char *ip, int port);
 void send_mpz(int socket, const mpz_t num);
 void recv_mpz(int socket, mpz_t num);
 
