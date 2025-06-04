@@ -22,6 +22,12 @@ pass: obj/client_pass.o obj/server_pass.o obj/common.o obj/rsa.o obj/sha.o obj/e
 	$(CC) -o server_pass obj/server_pass.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
 
 
+fiat_id: obj/client_a_fiat.o obj/client_b_fiat.o obj/server_fiat.o  obj/essential_func.o obj/common.o
+	$(CC) -o fiat_id_client_a obj/client_a_fiat.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o fiat_id_client_b obj/client_b_fiat.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o fiat_id_server obj/server_fiat.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
+
+
 
 
 
@@ -73,6 +79,22 @@ obj/client_pass.o: src/id2/client_pass.c
 
 obj/server_pass.o: src/id2/server_pass.c 	
 	$(CC) -c src/id2/server_pass.c -o obj/server_pass.o 
+
+obj/client_a_fiat.o: src/id2/client_a_fiat.c 	
+	$(CC) -c src/id2/client_a_fiat.c -o obj/client_a_fiat.o 
+
+obj/client_b_fiat.o: src/id2/client_b_fiat.c 	
+	$(CC) -c src/id2/client_b_fiat.c -o obj/client_b_fiat.o 
+	
+obj/server_fiat.o: src/id2/server_fiat.c 	
+	$(CC) -c src/id2/server_fiat.c -o obj/server_fiat.o 
+
+
+
+obj/server_pass.o: src/id2/server_pass.c 	
+	$(CC) -c src/id2/server_pass.c -o obj/server_pass.o 
+
+
 
 
 obj/common.o: src/id2/common.c src/id2/common.h
