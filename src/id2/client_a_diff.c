@@ -7,13 +7,34 @@ int main() {
     mpz_t p, g, a, A, B, key;
     mpz_inits(p, g, a, A, B, key, NULL);
 
-    // Шаг 1: клиентА генерирует параметры
-    printf("ClientA: Generate prime p...\n");
-    generate_prime(p, 512, state);
+    // Чтение p и g из файла
+    FILE *fp = fopen("diff.key", "r");
+    if (!fp) {
+        handle_error("Failed to open diff.key");
+    }
 
-    printf("ClientA: Generate primitive root g...\n");
-    generate_primitive_root(g, p, state);
+    char line[4096];
+    char *p_str = NULL, *g_str = NULL;
 
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "p=", 2) == 0) {
+            p_str = strdup(line + 2);
+            p_str[strcspn(p_str, "\n")] = 0;
+        } else if (strncmp(line, "g=", 2) == 0) {
+            g_str = strdup(line + 2);
+            g_str[strcspn(g_str, "\n")] = 0;
+        }
+    }
+
+    fclose(fp);
+
+    mpz_set_str(p, p_str, 16);
+    mpz_set_str(g, g_str, 16);
+
+    free(p_str);
+    free(g_str);
+
+    // Генерация личного ключа
     mpz_urandomb(a, state, 256);
     fast_power_mod(A, g, a, p);
 
@@ -22,10 +43,10 @@ int main() {
     printf("ClientA waits for second peer...\n");
     int client_fd = accept(server_fd, NULL, NULL);
 
-    send_mpz(client_fd, p);
-    send_mpz(client_fd, g);
+    // Отправляем A
     send_mpz(client_fd, A);
 
+    // Получаем B
     recv_mpz(client_fd, B);
 
     // Вычисляем общий секрет
