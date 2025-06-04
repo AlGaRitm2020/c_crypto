@@ -1,0 +1,42 @@
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -fvisibility=hidden
+INCLUDES = -Isrc/
+
+# Directories
+SRC_DIR = src
+OBJ_DIR = obj
+BIN_DIR = bin
+
+# Targets
+all: $(BIN_DIR)/hmac $(BIN_DIR)/sha
+
+# Create directories
+$(BIN_DIR) $(OBJ_DIR):
+	mkdir -p $@
+
+# HMAC executable - compiles sha.c with main hidden
+$(BIN_DIR)/hmac: $(OBJ_DIR)/hmac.o $(OBJ_DIR)/sha_nomain.o | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# SHA executable - compiles sha.c normally
+$(BIN_DIR)/sha: $(OBJ_DIR)/sha_main.o | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# SHA implementation without main (for HMAC)
+$(OBJ_DIR)/sha_nomain.o: $(SRC_DIR)/sha.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -fdata-sections -ffunction-sections -DSHA_STANDALONE=0 -c -o $@ $<
+	objcopy --localize-hidden $@  # Hide all non-exported symbols
+
+# SHA with main (standalone)
+$(OBJ_DIR)/sha_main.o: $(SRC_DIR)/sha.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -DSHA_STANDALONE=1 -c -o $@ $<
+
+# HMAC implementation
+$(OBJ_DIR)/hmac.o: $(SRC_DIR)/hmac.c $(SRC_DIR)/sha.h | $(OBJ_DIR)
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
+clean:
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
+
+.PHONY: all clean
