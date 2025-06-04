@@ -133,7 +133,7 @@ bool cades_sign_file(
         }
     }
    else if(encode_algo == FIAT_SHAMIR) {
-        fs_sign((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
+        fs_sign((char *)hash, hash_len, (char *)private_key_file, 20, &enc_sig, &enc_len, verbose);
         if (!enc_sig || enc_len == 0) {
             if (verbose) fprintf(stderr, "Ошибка Fiat-Shamir подписи\n");
             free(hash);
@@ -224,7 +224,7 @@ bool cades_verify_file(
                               (char *)sig->signature, sig->signature_len, verbose);
     }
     else if(sig->encode_algo == FIAT_SHAMIR) {
-        valid = fs_verify((char *)hash, hash_len, (char *)public_key_file,
+        valid = fs_verify((char *)hash, hash_len, (char *)public_key_file,20,
                          (char *)sig->signature, sig->signature_len, verbose);
     }
 
@@ -327,13 +327,13 @@ int main(int argc, char *argv[]) {
     }
 
     const char *filename = "env.sh";
-    const EncodeAlgorithm encode_algo = FIAT_SHAMIR;
+    const EncodeAlgorithm encode_algo = RSA;
     // const char *private_key = "elgamal.pri";
     // const char *public_key = "elgamal.pub";
-    // const char *private_key = "hello";
-    // const char *public_key = "hello.pub";
-    const char *private_key = "fs.pri";
-    const char *public_key = "fs.pub";
+    const char *private_key = "hello";
+    const char *public_key = "hello.pub";
+    // const char *private_key = "fs.pri";
+    // const char *public_key = "fs.pub";
     const char *signature_file = "signatures/signature.bin";
 
     if (strcmp(argv[1], "sign") == 0) {

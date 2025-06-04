@@ -25,21 +25,18 @@ bool request_tsa_signature(const uint8_t *hash, size_t hash_len, const char *tim
         return false;
     }
 
-    // Отправка длины хеша
     if (write(sock, &hash_len, sizeof(size_t)) != sizeof(size_t)) {
         perror("write hash_len");
         close(sock);
         return false;
     }
 
-    // Отправка хеша
     if (write(sock, hash, hash_len) != hash_len) {
         perror("write hash");
         close(sock);
         return false;
     }
 
-    // Отправка длины timestamp
     size_t timestamp_len = strlen(timestamp) + 1;
     if (write(sock, &timestamp_len, sizeof(size_t)) != sizeof(size_t)) {
         perror("write timestamp_len");
@@ -47,7 +44,6 @@ bool request_tsa_signature(const uint8_t *hash, size_t hash_len, const char *tim
         return false;
     }
 
-    // Отправка timestamp
     if (write(sock, timestamp, timestamp_len) != timestamp_len) {
         perror("write timestamp");
         close(sock);
@@ -56,7 +52,6 @@ bool request_tsa_signature(const uint8_t *hash, size_t hash_len, const char *tim
 
     printf("Данные отправлены, ожидание ответа...\n");
 
-    // Получение длины подписи
     if (read(sock, ts_len, sizeof(size_t)) != sizeof(size_t)) {
         perror("read signature length");
         close(sock);
@@ -86,7 +81,6 @@ bool request_tsa_signature(const uint8_t *hash, size_t hash_len, const char *tim
 
 bool verify_tsa_signature(const uint8_t *hash, size_t hash_len, const char *timestamp,
                          const uint8_t *ts_sig, size_t ts_sig_len) {
-    // Здесь должна быть реализована проверка подписи
-    // Временно всегда возвращаем true
+    
     return true;
 }

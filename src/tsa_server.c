@@ -5,6 +5,39 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include "rsa.h"
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+
+int is_timestamp_valid(char* timestamp) {
+    return 1;
+    // time_t now = time(NULL);
+    // double diff_seconds = difftime(now, timestamp);
+    // return (diff_seconds >= 0 && diff_seconds <= 120);  // Не старше 2 минут
+}
+
+//
+// int is_timestamp_valid(const char* timestamp) {
+//     struct tm tm_time = {0};
+//     time_t timestamp_time, current_time;
+//     double diff_seconds;
+//
+//     // Парсим строку timestamp в struct tm
+//     if (strptime(timestamp, "%Y-%m-%d %H:%M:%S", &tm_time) == NULL) {
+//         return 0; // Ошибка парсинга
+//     }
+//
+//     // Преобразуем в time_t
+//     timestamp_time = mktime(&tm_time);
+//     current_time = time(NULL); // Текущее время
+//
+//     // Разница в секундах
+//     diff_seconds = difftime(current_time, timestamp_time);
+//
+//     // Проверяем что разница не более 2 минут (120 секунд) и не отрицательная
+//     return (diff_seconds >= 0 && diff_seconds <= 120);
+// }
 
 int main() {
     int server_fd, new_socket;
@@ -55,6 +88,8 @@ int main() {
 
         printf("Новое соединение принято\n");
 
+
+
         // Чтение длины хеша
         size_t hash_len;
         if (read(new_socket, &hash_len, sizeof(size_t)) != sizeof(size_t)) {
@@ -96,6 +131,8 @@ int main() {
             continue;
         }
 
+
+
         if (read(new_socket, timestamp, timestamp_len) != timestamp_len) {
             perror("read timestamp");
             free(hash);
@@ -104,9 +141,17 @@ int main() {
             continue;
         }
 
+
         printf("Получены данные: hash_len=%zu, timestamp='%s'\n", hash_len, timestamp);
 
         // Создание подписи
+        if (!is_timestamp_valid(timestamp)) {
+            free(hash);
+            free(timestamp);
+            close(new_socket);
+            continue;
+            perror("old timestamp (>=120sec)");
+         }
         char *tbs = (char*)malloc(hash_len + timestamp_len);
         if (!tbs) {
             perror("malloc tbs");
