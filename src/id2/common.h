@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <gmp.h> // Добавлено для лабы 15
+#include "../essential_func.h"
 
 #define PORT_B 8081
 #define KEY_SIZE 16

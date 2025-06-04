@@ -27,6 +27,11 @@ fiat_id: obj/client_a_fiat.o obj/client_b_fiat.o obj/server_fiat.o  obj/essentia
 	$(CC) -o fiat_id_client_b obj/client_b_fiat.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
 	$(CC) -o fiat_id_server obj/server_fiat.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
 
+diff: obj/client_a_diff.o obj/client_b_diff.o obj/client_a_diff.o  obj/essential_func.o obj/common.o
+	$(CC) -o diff_client_a obj/client_a_diff.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o diff_client_b obj/client_b_diff.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
+
+
 
 
 
@@ -85,6 +90,14 @@ obj/client_a_fiat.o: src/id2/client_a_fiat.c
 
 obj/client_b_fiat.o: src/id2/client_b_fiat.c 	
 	$(CC) -c src/id2/client_b_fiat.c -o obj/client_b_fiat.o 
+
+
+obj/client_a_diff.o: src/id2/client_a_diff.c 	
+	$(CC) -c src/id2/client_a_diff.c -o obj/client_a_diff.o 
+
+obj/client_b_diff.o: src/id2/client_b_diff.c 	
+	$(CC) -c src/id2/client_b_diff.c -o obj/client_b_diff.o 
+	
 	
 obj/server_fiat.o: src/id2/server_fiat.c 	
 	$(CC) -c src/id2/server_fiat.c -o obj/server_fiat.o 
