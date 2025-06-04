@@ -32,6 +32,10 @@ diff: obj/client_a_diff.o obj/client_b_diff.o obj/server_diff.o obj/client_a_dif
 	$(CC) -o diff_client_b obj/client_b_diff.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
 	$(CC) -o diff_server obj/server_diff.o obj/common.o obj/essential_func.o -lssl -lcrypto -lgmp
 
+speke: obj/client_a_speke.o obj/client_b_speke.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o
+	$(CC) -o client_a_speke obj/client_a_speke.o obj/common.o obj/rsa.o  obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+	$(CC) -o client_b_speke obj/client_b_speke.o obj/common.o obj/rsa.o obj/sha.o obj/essential_func.o -lssl -lcrypto -lgmp
+
 
 
 
@@ -98,6 +102,15 @@ obj/client_a_diff.o: src/id2/client_a_diff.c
 
 obj/client_b_diff.o: src/id2/client_b_diff.c 	
 	$(CC) -c src/id2/client_b_diff.c -o obj/client_b_diff.o 
+
+
+obj/client_a_speke.o: src/id2/client_a_speke.c 	
+	$(CC) -c src/id2/client_a_speke.c -o obj/client_a_speke.o 
+
+obj/client_b_speke.o: src/id2/client_b_speke.c 	
+	$(CC) -c src/id2/client_b_speke.c -o obj/client_b_speke.o 
+
+
 
 obj/server_diff.o: src/id2/server_diff.c 	
 	$(CC) -c src/id2/server_diff.c -o obj/server_diff.o 
