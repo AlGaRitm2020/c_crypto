@@ -1,203 +1,164 @@
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
-#include "rsa.h"
-#include <stdio.h>
-#include <string.h>
 #include <time.h>
+#include "rsa.h"
+#include "sign.h"
 
-
-int is_timestamp_valid(char* timestamp) {
-    return 1;
-    // time_t now = time(NULL);
-    // double diff_seconds = difftime(now, timestamp);
-    // return (diff_seconds >= 0 && diff_seconds <= 120);  // Не старше 2 минут
+bool is_timestamp_valid(const char* timestamp) {
+    time_t now = time(NULL);
+    struct tm tm_time = {0};
+    
+    char* end = strptime(timestamp, "%Y%m%d%H%M%S", &tm_time);
+    if (end == NULL || *end != '\0') {
+        return false;
+    }
+    
+    time_t ts_time = timegm(&tm_time);
+    double diff_seconds = difftime(now, ts_time);
+    
+    return (diff_seconds >= 0 && diff_seconds <= 120);
 }
 
-//
-// int is_timestamp_valid(const char* timestamp) {
-//     struct tm tm_time = {0};
-//     time_t timestamp_time, current_time;
-//     double diff_seconds;
-//
-//     // Парсим строку timestamp в struct tm
-//     if (strptime(timestamp, "%Y-%m-%d %H:%M:%S", &tm_time) == NULL) {
-//         return 0; // Ошибка парсинга
-//     }
-//
-//     // Преобразуем в time_t
-//     timestamp_time = mktime(&tm_time);
-//     current_time = time(NULL); // Текущее время
-//
-//     // Разница в секундах
-//     diff_seconds = difftime(current_time, timestamp_time);
-//
-//     // Проверяем что разница не более 2 минут (120 секунд) и не отрицательная
-//     return (diff_seconds >= 0 && diff_seconds <= 120);
-// }
+void handle_sign_request(int sock) {
+    CAdESSignature sig = {0};
+
+    // Читаем данные подписи
+    if (read(sock, &sig.signature_len, sizeof(size_t)) != sizeof(size_t) ||
+        !(sig.signature = malloc(sig.signature_len)) ||
+        read(sock, sig.signature, sig.signature_len) != sig.signature_len ||
+        read(sock, sig.timestamp, sizeof(sig.timestamp)) != sizeof(sig.timestamp) ||
+        read(sock, &sig.hash_algo, sizeof(HashAlgorithm)) != sizeof(HashAlgorithm) ||
+        read(sock, &sig.encode_algo, sizeof(EncodeAlgorithm)) != sizeof(EncodeAlgorithm) ||
+        read(sock, sig.signer_name, sizeof(sig.signer_name)) != sizeof(sig.signer_name)) {
+        perror("read signature data");
+        free(sig.signature);
+        return;
+    }
+
+    // Проверяем временную метку
+    if (!is_timestamp_valid(sig.timestamp)) {
+        printf("Invalid timestamp\n");
+        free(sig.signature);
+        return;
+    }
+
+    // Создаем данные для подписи TSA (вся структура кроме ts_signature)
+    size_t tbs_len = sizeof(sig) - sizeof(sig.ts_signature) - sizeof(sig.ts_signature_len);
+    uint8_t tbs[tbs_len];
+    memcpy(tbs, &sig, tbs_len);
+
+    // Подписываем данные
+    char *ts_sig = NULL;
+    size_t ts_sig_len = 0;
+    rsa_encode((char*)tbs, tbs_len, "keys/ts", &ts_sig, &ts_sig_len, 1);
+
+    // Отправляем подпись
+    if (write(sock, &ts_sig_len, sizeof(size_t)) != sizeof(size_t) ||
+        write(sock, ts_sig, ts_sig_len) != ts_sig_len) {
+        perror("write signature");
+    }
+
+    free(sig.signature);
+    free(ts_sig);
+}
+
+void handle_verify_request(int sock) {
+    CAdESSignature sig = {0};
+
+    // Читаем данные для верификации
+    if (read(sock, &sig.signature_len, sizeof(size_t)) != sizeof(size_t) ||
+        !(sig.signature = malloc(sig.signature_len)) ||
+        read(sock, sig.signature, sig.signature_len) != sig.signature_len ||
+        read(sock, sig.timestamp, sizeof(sig.timestamp)) != sizeof(sig.timestamp) ||
+        read(sock, &sig.hash_algo, sizeof(HashAlgorithm)) != sizeof(HashAlgorithm) ||
+        read(sock, &sig.encode_algo, sizeof(EncodeAlgorithm)) != sizeof(EncodeAlgorithm) ||
+        read(sock, sig.signer_name, sizeof(sig.signer_name)) != sizeof(sig.signer_name) ||
+        read(sock, &sig.ts_signature_len, sizeof(size_t)) != sizeof(size_t) ||
+        !(sig.ts_signature = malloc(sig.ts_signature_len)) ||
+        read(sock, sig.ts_signature, sig.ts_signature_len) != sig.ts_signature_len) {
+        perror("read verify data");
+        free(sig.signature);
+        free(sig.ts_signature);
+        return;
+    }
+
+    // Проверяем временную метку
+    bool timestamp_valid = is_timestamp_valid(sig.timestamp);
+
+    // Проверяем подпись TSA
+    size_t tbs_len = sizeof(sig) - sizeof(sig.ts_signature) - sizeof(sig.ts_signature_len);
+    uint8_t tbs[tbs_len];
+    memcpy(tbs, &sig, tbs_len);
+
+    char *decrypted = NULL;
+    size_t decrypted_len = 0;
+    rsa_decode((char*)sig.ts_signature, sig.ts_signature_len, "keys/ts", &decrypted, &decrypted_len, 1);
+
+    bool signature_valid = (decrypted_len == tbs_len) && 
+                         (memcmp(decrypted, tbs, tbs_len) == 0);
+
+    // Отправляем результат
+    uint8_t result = timestamp_valid && signature_valid;
+    write(sock, &result, 1);
+
+    free(sig.signature);
+    free(sig.ts_signature);
+    free(decrypted);
+}
 
 int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-
-    // Создание сокета
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("socket failed");
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("socket");
         exit(EXIT_FAILURE);
     }
 
-    // Настройка адреса сервера
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(8080);
+    struct sockaddr_in address = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = INADDR_ANY,
+        .sin_port = htons(8080)
+    };
 
-    // Разрешаем повторное использование порта
-    int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
-        perror("setsockopt");
+    if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        perror("bind");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Привязка сокета
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // Ожидание соединений
-    if (listen(server_fd, 3) < 0) {
+    if (listen(server_fd, 5) < 0) {
         perror("listen");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    printf("TSA сервер запущен на порту 8080...\n");
+    printf("TSA server running on port 8080\n");
 
     while (1) {
-        // Принятие соединения
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+        int client_sock = accept(server_fd, NULL, NULL);
+        if (client_sock < 0) {
             perror("accept");
             continue;
         }
 
-        printf("Новое соединение принято\n");
-
-
-
-        // Чтение длины хеша
-        size_t hash_len;
-        if (read(new_socket, &hash_len, sizeof(size_t)) != sizeof(size_t)) {
-            perror("read hash_len");
-            close(new_socket);
+        uint8_t request_type;
+        if (read(client_sock, &request_type, 1) != 1) {
+            perror("read request type");
+            close(client_sock);
             continue;
         }
 
-        // Чтение хеша
-        uint8_t *hash = malloc(hash_len);
-        if (!hash) {
-            perror("malloc hash");
-            close(new_socket);
-            continue;
+        if (request_type == 0) {
+            handle_sign_request(client_sock);
+        } else if (request_type == 1) {
+            handle_verify_request(client_sock);
         }
 
-        if (read(new_socket, hash, hash_len) != hash_len) {
-            perror("read hash");
-            free(hash);
-            close(new_socket);
-            continue;
-        }
-
-        // Чтение длины timestamp
-        size_t timestamp_len;
-        if (read(new_socket, &timestamp_len, sizeof(size_t)) != sizeof(size_t)) {
-            perror("read timestamp_len");
-            free(hash);
-            close(new_socket);
-            continue;
-        }
-
-        // Чтение timestamp
-        char *timestamp = malloc(timestamp_len);
-        if (!timestamp) {
-            perror("malloc timestamp");
-            free(hash);
-            close(new_socket);
-            continue;
-        }
-
-
-
-        if (read(new_socket, timestamp, timestamp_len) != timestamp_len) {
-            perror("read timestamp");
-            free(hash);
-            free(timestamp);
-            close(new_socket);
-            continue;
-        }
-
-
-        printf("Получены данные: hash_len=%zu, timestamp='%s'\n", hash_len, timestamp);
-
-        // Создание подписи
-        if (!is_timestamp_valid(timestamp)) {
-            free(hash);
-            free(timestamp);
-            close(new_socket);
-            continue;
-            perror("old timestamp (>=120sec)");
-         }
-        char *tbs = (char*)malloc(hash_len + timestamp_len);
-        if (!tbs) {
-            perror("malloc tbs");
-            free(hash);
-            free(timestamp);
-            close(new_socket);
-            continue;
-        }
-
-        memcpy(tbs, hash, hash_len);
-        memcpy(tbs + hash_len, timestamp, timestamp_len);
-
-        char *ts_sig = NULL;
-        size_t ts_sig_len = 0;
-        rsa_encode(tbs, hash_len + timestamp_len, "keys/ts", &ts_sig, &ts_sig_len, 1); 
-
-        // Отправка длины подписи
-        if (write(new_socket, &ts_sig_len, sizeof(size_t)) != sizeof(size_t)) {
-            perror("write sig_len");
-            free(hash);
-            free(timestamp);
-            free(tbs);
-            free(ts_sig);
-            close(new_socket);
-            continue;
-        }
-
-        // Отправка подписи
-        if (write(new_socket, ts_sig, ts_sig_len) != ts_sig_len) {
-            perror("write signature");
-            free(hash);
-            free(timestamp);
-            free(tbs);
-            free(ts_sig);
-            close(new_socket);
-            continue;
-        }
-
-        printf("Подпись отправлена (%zu байт)\n", ts_sig_len);
-
-        // Очистка
-        free(hash);
-        free(timestamp);
-        free(tbs);
-        free(ts_sig);
-        close(new_socket);
+        close(client_sock);
     }
 
     close(server_fd);

@@ -1,5 +1,8 @@
 #include "common.h"
-#include <openssl/sha.h>
+#include "../sha.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 #define ID "Client_A"
 #define PASSWORD_FILE "weak_password.txt"
@@ -14,15 +17,28 @@ void fix_endian(uint8_t *hash, size_t len) {
 }
 
 void compute_hash_chain(const char *password, int iterations, uint8_t *result) {
-    uint8_t temp_hash[SHA256_DIGEST_LENGTH];
-    SHA256((const uint8_t *)password, strlen(password), temp_hash);
+    uint8_t *temp_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+    char *password_copy = strdup(password);
+    
+    // Первый хэш
+    sha256((void **)&password_copy, strlen(password), (void **)&temp_hash);
     fix_endian(temp_hash, SHA256_DIGEST_LENGTH);
 
+    // Последующие итерации
     for (int i = 1; i < iterations; i++) {
-        SHA256(temp_hash, SHA256_DIGEST_LENGTH, temp_hash);
-        fix_endian(temp_hash, SHA256_DIGEST_LENGTH);
+        uint8_t *new_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        uint8_t *temp_copy = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(temp_copy, temp_hash, SHA256_DIGEST_LENGTH);
+        
+        sha256((void **)&temp_copy, SHA256_DIGEST_LENGTH, (void **)&new_hash);
+        fix_endian(new_hash, SHA256_DIGEST_LENGTH);
+
+        free(temp_hash);
+        free(temp_copy);
+        temp_hash = new_hash;
     }
     memcpy(result, temp_hash, SHA256_DIGEST_LENGTH);
+    free(temp_hash);
 }
 
 int main() {
@@ -36,15 +52,13 @@ int main() {
     printf("[A] Waiting for client B...\n");
     int client_fd = accept(server_fd, NULL, NULL);
 
-    // Инициализация: h^MAX_ITER(password)
     uint8_t stored_hash[SHA256_DIGEST_LENGTH];
     compute_hash_chain(password, MAX_ITER, stored_hash);
-    int current_iter = 1;  // Теперь считаем от 1 до MAX_ITER
+    int current_iter = 1;
 
     while (current_iter <= MAX_ITER) {
         printf("\n[A] Waiting for iteration %d...\n", current_iter);
 
-        // Получение от клиента: ID|iter|hash
         char auth_msg[1024];
         ssize_t recv_len = recv(client_fd, auth_msg, sizeof(auth_msg), 0);
         if (recv_len <= 0) handle_error("Failed to receive auth data");
@@ -53,19 +67,22 @@ int main() {
         int received_iter = atoi(iter_ptr);
         uint8_t *received_hash = (uint8_t *)(strchr(iter_ptr, '|') + 1);
 
-        // Проверка итерации
         if (received_iter != current_iter) {
             send(client_fd, "Invalid iteration", 17, 0);
             continue;
         }
 
-        // Проверка хэша: H(received_hash) == stored_hash?
-        uint8_t computed_hash[SHA256_DIGEST_LENGTH];
-        SHA256(received_hash, SHA256_DIGEST_LENGTH, computed_hash);
+        uint8_t *computed_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        uint8_t *hash_copy = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(hash_copy, received_hash, SHA256_DIGEST_LENGTH);
+        
+        sha256((void **)&hash_copy, SHA256_DIGEST_LENGTH, (void **)&computed_hash);
         fix_endian(computed_hash, SHA256_DIGEST_LENGTH);
 
         if (memcmp(computed_hash, stored_hash, SHA256_DIGEST_LENGTH) != 0) {
             send(client_fd, "Authentication failed", 21, 0);
+            free(computed_hash);
+            free(hash_copy);
             continue;
         }
 
@@ -102,11 +119,12 @@ int main() {
         mpz_get_str(key_str, 16, key);
         printf("[A] Shared key (iter %d): %s\n", current_iter, key_str);
 
-        // Обновление stored_hash для следующей итерации
         memcpy(stored_hash, received_hash, SHA256_DIGEST_LENGTH);
         current_iter++;
 
         mpz_clears(p, g, a, A, B, key, NULL);
+        free(computed_hash);
+        free(hash_copy);
     }
 
     close(client_fd);

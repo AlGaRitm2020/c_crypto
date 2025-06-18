@@ -1,10 +1,13 @@
 #include "common.h"
-#include <openssl/sha.h>
+#include "../sha.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 #define ID "Client_B"
 #define PASSWORD_FILE "weak_password.txt"
 #define SHA256_DIGEST_LENGTH 32
-#define MAX_ITER 999 
+#define MAX_ITER 999
 
 void fix_endian(uint8_t *hash, size_t len) {
     for (size_t i = 0; i < len; i += 4) {
@@ -14,15 +17,26 @@ void fix_endian(uint8_t *hash, size_t len) {
 }
 
 void compute_hash_chain(const char *password, int iterations, uint8_t *result) {
-    uint8_t temp_hash[SHA256_DIGEST_LENGTH];
-    SHA256((const uint8_t *)password, strlen(password), temp_hash);
+    uint8_t *temp_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+    char *password_copy = strdup(password);
+    
+    sha256((void **)&password_copy, strlen(password), (void **)&temp_hash);
     fix_endian(temp_hash, SHA256_DIGEST_LENGTH);
 
     for (int i = 1; i < iterations; i++) {
-        SHA256(temp_hash, SHA256_DIGEST_LENGTH, temp_hash);
-        fix_endian(temp_hash, SHA256_DIGEST_LENGTH);
+        uint8_t *new_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        uint8_t *temp_copy = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+        memcpy(temp_copy, temp_hash, SHA256_DIGEST_LENGTH);
+        
+        sha256((void **)&temp_copy, SHA256_DIGEST_LENGTH, (void **)&new_hash);
+        fix_endian(new_hash, SHA256_DIGEST_LENGTH);
+
+        free(temp_hash);
+        free(temp_copy);
+        temp_hash = new_hash;
     }
     memcpy(result, temp_hash, SHA256_DIGEST_LENGTH);
+    free(temp_hash);
 }
 
 int main() {
@@ -36,11 +50,10 @@ int main() {
 
     while (1) {
         int iteration;
-        printf("[B] Enter iteration (from 1): ");
+        printf("[B] Enter iteration (1-%d, 0 to exit): ", MAX_ITER);
         scanf("%d", &iteration);
         if (iteration <= 0) break;
 
-        // Вычисляем h^{MAX_ITER - iteration + 1}(password)
         uint8_t current_hash[SHA256_DIGEST_LENGTH];
         compute_hash_chain(password, MAX_ITER - iteration + 1, current_hash);
 

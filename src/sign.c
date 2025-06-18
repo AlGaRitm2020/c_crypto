@@ -151,16 +151,7 @@ bool cades_sign_file(
     char timestamp[20];
     get_utc_timestamp(timestamp, sizeof(timestamp));
 
-    uint8_t *ts_signature = NULL;
-    size_t ts_signature_len = 0;
-    if (!request_tsa_signature(hash, hash_len, timestamp, &ts_signature, &ts_signature_len)) {
-        if (verbose) fprintf(stderr, "Ошибка получения временной метки\n");
-        free(hash);
-        free(file_data);
-        free(enc_sig);
-        return false;
-    }
-
+    // Заполняем структуру для отправки в TSA
     sig->signature = (uint8_t*)enc_sig;
     sig->signature_len = enc_len;
     memcpy(sig->timestamp, timestamp, sizeof(timestamp));
@@ -168,14 +159,20 @@ bool cades_sign_file(
     sig->encode_algo = encode_algo;
     strncpy(sig->signer_name, signer_name, sizeof(sig->signer_name)-1);
     sig->signer_name[sizeof(sig->signer_name)-1] = '\0';
-    sig->ts_signature = ts_signature;
-    sig->ts_signature_len = ts_signature_len;
+
+    // Получаем подпись TSA для всей структуры
+    if (!request_tsa_signature(sig, &sig->ts_signature, &sig->ts_signature_len)) {
+        if (verbose) fprintf(stderr, "Ошибка получения подписи TSA\n");
+        free(enc_sig);
+        free(hash);
+        free(file_data);
+        return false;
+    }
 
     free(hash);
     free(file_data);
     return true;
 }
-
 bool cades_verify_file(
     const char *filename,
     const char *public_key_file,
@@ -183,6 +180,13 @@ bool cades_verify_file(
     const CAdESSignature *sig,
     int verbose
 ) {
+    // Сначала проверяем подпись TSA
+    if (!verify_tsa_signature(sig)) {
+        if (verbose) fprintf(stderr, "Недействительная подпись TSA\n");
+        return false;
+    }
+
+    // Затем проверяем подпись пользователя
     uint8_t *file_data;
     size_t file_len;
 
@@ -192,7 +196,7 @@ bool cades_verify_file(
     }
 
     size_t hash_len = (sig->hash_algo == HASH_SHA256) ? 32 : 64;
-    uint8_t* hash = malloc(hash_len);
+    uint8_t* hash = (uint8_t*)malloc(hash_len);
     if (!hash) {
         free(file_data);
         return false;
@@ -209,16 +213,10 @@ bool cades_verify_file(
         char *decrypted_hash = NULL;
         size_t decrypted_len = 0;
         rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
-        
-        if (!decrypted_hash) {
-            free(hash);
-            free(file_data);
-            return false;
-        }
-        
-        valid = memcmp(decrypted_hash, hash, hash_len) == 0;
+        valid = decrypted_hash && (memcmp(decrypted_hash, hash, hash_len) == 0);
         free(decrypted_hash);
-    }
+    }   
+    
     else if(sig->encode_algo == EL_GAMAL) {
         valid = el_gamal_verify((char *)hash, hash_len, (char *)public_key_file, 
                               (char *)sig->signature, sig->signature_len, verbose);
@@ -320,64 +318,76 @@ void cades_free_signature(CAdESSignature *sig) {
     if (sig->ts_signature) free(sig->ts_signature);
 }
 
+#ifndef LIB
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        printf("Использование: %s [sign|verify|view]\n", argv[0]);
+        printf("Usage: %s [sign|verify|view]\n", argv[0]);
         return 1;
     }
 
     const char *filename = "env.sh";
-    const EncodeAlgorithm encode_algo = RSA;
-    // const char *private_key = "elgamal.pri";
-    // const char *public_key = "elgamal.pub";
     const char *private_key = "hello";
     const char *public_key = "hello.pub";
-    // const char *private_key = "fs.pri";
-    // const char *public_key = "fs.pub";
     const char *signature_file = "signatures/signature.bin";
 
     if (strcmp(argv[1], "sign") == 0) {
         CAdESSignature sig = {0};
-        if (!cades_sign_file(filename, private_key, public_key, HASH_SHA256, encode_algo, "Ivan Ivanov", &sig, 1)) {
-            printf("Ошибка подписания!\n");
+        if (!RSA_sign(filename, private_key, public_key, HASH_SHA256, "Ivan Ivanov", &sig, 1)) {
+            printf("Signing failed!\n");
             return 1;
         }
 
         if (!cades_save_signature(signature_file, &sig)) {
-            printf("Ошибка сохранения подписи!\n");
+            printf("Failed to save signature!\n");
             cades_free_signature(&sig);
             return 1;
         }
 
-        printf("Файл успешно подписан.\n");
+        printf("File signed successfully.\n");
         cades_view_signature(&sig);
         cades_free_signature(&sig);
 
     } else if (strcmp(argv[1], "verify") == 0) {
         CAdESSignature loaded_sig;
         if (!cades_load_signature(signature_file, &loaded_sig)) {
-            printf("Не удалось загрузить подпись\n");
+            printf("Failed to load signature\n");
             return 1;
         }
 
-        bool valid = cades_verify_file(filename, public_key, private_key, &loaded_sig, 1);
-        printf("Результат проверки: %s\n", valid ? "Подпись верна" : "Подпись неверна");
+        bool valid = RSA_verify(filename, public_key, &loaded_sig, 1);
+        printf("Verification result: %s\n", valid ? "Valid signature" : "Invalid signature");
         cades_view_signature(&loaded_sig);
         cades_free_signature(&loaded_sig);
 
     } else if (strcmp(argv[1], "view") == 0) {
         CAdESSignature loaded_sig;
         if (!cades_load_signature(signature_file, &loaded_sig)) {
-            printf("Не удалось загрузить подпись\n");
+            printf("Failed to load signature\n");
             return 1;
         }
         cades_view_signature(&loaded_sig);
         cades_free_signature(&loaded_sig);
 
     } else {
-        printf("Неизвестный режим: %s\n", argv[1]);
+        printf("Unknown mode: %s\n", argv[1]);
         return 1;
     }
 
     return 0;
+}
+
+#endif // LIB
+
+// Новые высокоуровневые функции RSA
+bool RSA_sign(const char *filename, const char *private_key_file, 
+              const char *public_key_file, HashAlgorithm hash_algo,
+              const char *signer_name, CAdESSignature *sig, int verbose) {
+    return cades_sign_file(filename, private_key_file, public_key_file, 
+                         hash_algo, RSA, signer_name, sig, verbose);
+}
+
+bool RSA_verify(const char *filename, const char *public_key_file,
+                const CAdESSignature *sig, int verbose) {
+    return cades_verify_file(filename, public_key_file, NULL, sig, verbose);
 }
