@@ -11,7 +11,7 @@ typedef enum {
 } HashAlgorithm;
 
 typedef enum {
-    RSA,
+    RSAA,
     EL_GAMAL,
     FIAT_SHAMIR 
 } EncodeAlgorithm;

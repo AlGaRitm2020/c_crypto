@@ -59,7 +59,7 @@ bool cades_view_signature(const CAdESSignature *sig) {
     printf("\n=== Информация о подписи ===\n");
     printf("Автор:        %s\n", sig->signer_name);
     printf("Алгоритм хеша:     %s\n", sig->hash_algo == HASH_SHA256 ? "SHA-256" : "SHA-512");
-    if (sig->encode_algo == RSA)
+    if (sig->encode_algo == RSAA)
       printf("Алгоритм шифрования: RSA \n");
     else if (sig->encode_algo == EL_GAMAL)
       printf("Алгоритм шифрования: EL_GAMAL\n");
@@ -114,7 +114,7 @@ bool cades_sign_file(
     char *enc_sig = NULL;
     size_t enc_len = 0;
     
-    if (encode_algo == RSA) {
+    if (encode_algo == RSAA) {
         rsa_encode((char *)hash, hash_len, (char *)private_key_file, &enc_sig, &enc_len, verbose);
         if (!enc_sig || enc_len == 0) {
             if (verbose) fprintf(stderr, "Ошибка RSA подписи\n");
@@ -209,7 +209,7 @@ bool cades_verify_file(
 
     bool valid = false;
     
-    if (sig->encode_algo == RSA) {
+    if (sig->encode_algo == RSAA) {
         char *decrypted_hash = NULL;
         size_t decrypted_len = 0;
         rsa_decode((char *)sig->signature, sig->signature_len, (char *)public_key_file, &decrypted_hash, &decrypted_len, verbose);
@@ -370,7 +370,7 @@ bool RSA_sign(const char *filename, const char *private_key_file,
               const char *public_key_file, HashAlgorithm hash_algo,
               const char *signer_name, CAdESSignature *sig, int verbose) {
     return cades_sign_file(filename, private_key_file, public_key_file, 
-                         hash_algo, RSA, signer_name, sig, verbose);
+                         hash_algo, RSAA, signer_name, sig, verbose);
 }
 
 bool RSA_verify(const char *filename, const char *public_key_file,
