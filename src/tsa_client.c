@@ -32,7 +32,7 @@ bool request_tsa_signature(const CAdESSignature *sig, uint8_t **ts_signature, si
         return false;
     }
 
-    // Сериализуем структуру для отправки на сервер
+    // Формируем данные для подписи вручную (без использования проблемной структуры)
     if (write(sock, &sig->signature_len, sizeof(size_t)) != sizeof(size_t) ||
         write(sock, sig->signature, sig->signature_len) != sig->signature_len ||
         write(sock, sig->timestamp, sizeof(sig->timestamp)) != sizeof(sig->timestamp) ||
@@ -61,6 +61,7 @@ bool request_tsa_signature(const CAdESSignature *sig, uint8_t **ts_signature, si
     if (read(sock, *ts_signature, *ts_len) != *ts_len) {
         perror("read signature");
         free(*ts_signature);
+        *ts_signature = NULL;
         close(sock);
         return false;
     }
@@ -68,8 +69,13 @@ bool request_tsa_signature(const CAdESSignature *sig, uint8_t **ts_signature, si
     close(sock);
     return true;
 }
-
 bool verify_tsa_signature(const CAdESSignature *sig) {
+    // return 1;
+    if (sig->ts_signature == NULL || sig->ts_signature_len == 0) {
+        fprintf(stderr, "No TSA signature present\n");
+        return false;
+    }
+
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         perror("socket");
@@ -95,7 +101,7 @@ bool verify_tsa_signature(const CAdESSignature *sig) {
         return false;
     }
 
-    // Сериализуем структуру для отправки на сервер
+    // Отправляем данные для верификации по отдельности
     if (write(sock, &sig->signature_len, sizeof(size_t)) != sizeof(size_t) ||
         write(sock, sig->signature, sig->signature_len) != sig->signature_len ||
         write(sock, sig->timestamp, sizeof(sig->timestamp)) != sizeof(sig->timestamp) ||
@@ -110,13 +116,13 @@ bool verify_tsa_signature(const CAdESSignature *sig) {
     }
 
     // Получаем результат верификации
-    uint8_t result;
-    if (read(sock, &result, 1) != 1) {
-        perror("read verify result");
+    uint8_t verification_result;
+    if (read(sock, &verification_result, 1) != 1) {
+        perror("read verification result");
         close(sock);
         return false;
     }
 
     close(sock);
-    return result == 1;
+    return verification_result == 1;
 }

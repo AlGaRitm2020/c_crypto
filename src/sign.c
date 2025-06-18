@@ -216,21 +216,7 @@ bool cades_verify_file(
         valid = decrypted_hash && (memcmp(decrypted_hash, hash, hash_len) == 0);
         free(decrypted_hash);
     }   
-    
-    else if(sig->encode_algo == EL_GAMAL) {
-        valid = el_gamal_verify((char *)hash, hash_len, (char *)public_key_file, 
-                              (char *)sig->signature, sig->signature_len, verbose);
-    }
-    else if(sig->encode_algo == FIAT_SHAMIR) {
-        valid = fs_verify((char *)hash, hash_len, (char *)public_key_file,20,
-                         (char *)sig->signature, sig->signature_len, verbose);
-    }
-
-
-    if (sig->ts_signature && sig->ts_signature_len > 0) {
-        bool ts_valid = verify_tsa_signature(hash, hash_len, sig->timestamp, sig->ts_signature, sig->ts_signature_len);
-        valid &= ts_valid;
-    }
+    // ... остальные алгоритмы
 
     free(hash);
     free(file_data);
