@@ -166,3 +166,24 @@ void hex_dump(const char *prefix, const void *data, size_t len) {
     }
     printf("\n");
 }
+
+
+// gmp_randstate_t state;
+//
+// void init_gmp() {
+//     gmp_randinit_default(state);
+//     gmp_randseed_ui(state, time(NULL));
+// }
+
+
+void compute_user_key(UserKey *user_key, mpz_t xi, BlomSecrets *secrets, mpz_t p) {
+    // ai = a + b*xi
+    mpz_mul(user_key->ai, secrets->b, xi);
+    mpz_add(user_key->ai, user_key->ai, secrets->a);
+    mpz_mod(user_key->ai, user_key->ai, p);
+
+    // bi = b + c*xi
+    mpz_mul(user_key->bi, secrets->c, xi);
+    mpz_add(user_key->bi, user_key->bi, secrets->b);
+    mpz_mod(user_key->bi, user_key->bi, p);
+}

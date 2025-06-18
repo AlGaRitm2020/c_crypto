@@ -32,7 +32,7 @@ pass: obj/client_pass.o obj/server_pass.o obj/common.o obj/rsa.o obj/sha.o obj/e
 # Правила для skey
 skey: client_a_skey client_b_skey
 
-client_a_skey: obj/client_a_skey.o obj/sign.o obj/rsa.o obj/essential_func.o obj/common.o obj/sha.o obj/el_gamal.o obj/fiat_shamir.o  
+client_a_skey: obj/client_a_skey.o sign_lib obj/rsa.o obj/essential_func.o obj/common.o obj/sha.o obj/el_gamal.o obj/fiat_shamir.o  
 	$(CC) -o client_a_skey obj/client_a_skey.o obj/sign.o obj/rsa.o obj/essential_func.o obj/common.o obj/sha.o obj/fiat_shamir.o obj/el_gamal.o $(LDFLAGS)
 
 client_b_skey: obj/client_b_skey.o obj/sign.o obj/rsa.o obj/essential_func.o obj/common.o obj/sha.o obj/el_gamal.o obj/fiat_shamir.o  
@@ -43,6 +43,12 @@ fiat_id: obj/client_a_fiat.o obj/client_b_fiat.o obj/server_fiat.o obj/essential
 	$(CC) -o fiat_id_client_a obj/client_a_fiat.o obj/common.o obj/essential_func.o $(LDFLAGS)
 	$(CC) -o fiat_id_client_b obj/client_b_fiat.o obj/common.o obj/essential_func.o $(LDFLAGS)
 	$(CC) -o fiat_id_server obj/server_fiat.o obj/common.o obj/essential_func.o $(LDFLAGS)
+
+blom: obj/client_a_blom.o  obj/server_blom.o obj/essential_func.o obj/common.o
+	$(CC) -o blom_client_a obj/client_a_blom.o obj/common.o obj/essential_func.o $(LDFLAGS)
+	$(CC) -o blom_server obj/server_blom.o obj/common.o obj/essential_func.o $(LDFLAGS)
+
+
 
 # Правила для diff
 diff: obj/client_a_diff.o obj/client_b_diff.o obj/server_diff.o obj/essential_func.o obj/common.o
@@ -79,6 +85,12 @@ hmac: obj/sha.o obj/hmac.o
 obj/sign.o: src/sign.c src/sign.h
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/sign.c -o obj/sign.o
+
+sign_lib: src/sign.c src/sign.h
+	mkdir -p obj
+	$(CC) $(CFLAGS) -DLIB=1 -c src/sign.c -o obj/sign.o
+
+
 
 obj/rsa.o: src/rsa.c src/rsa.h
 	mkdir -p obj
@@ -156,6 +168,17 @@ obj/client_b_fiat.o: src/id2/client_b_fiat.c
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/id2/client_b_fiat.c -o obj/client_b_fiat.o
 
+
+obj/client_a_blom.o: src/id2/client_a_blom.c
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/id2/client_a_blom.c -o obj/client_a_blom.o
+
+obj/client_b_blom.o: src/id2/client_b_blom.c
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/id2/client_b_blom.c -o obj/client_b_blom.o
+
+
+
 obj/client_a_diff.o: src/id2/client_a_diff.c
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/id2/client_a_diff.c -o obj/client_a_diff.o
@@ -171,6 +194,11 @@ obj/server_diff.o: src/id2/server_diff.c
 obj/server_fiat.o: src/id2/server_fiat.c
 	mkdir -p obj
 	$(CC) $(CFLAGS) -c src/id2/server_fiat.c -o obj/server_fiat.o
+
+obj/server_blom.o: src/id2/server_blom.c
+	mkdir -p obj
+	$(CC) $(CFLAGS) -c src/id2/server_blom.c -o obj/server_blom.o
+
 
 obj/client_a_speke.o: src/id2/client_a_speke.c
 	mkdir -p obj
